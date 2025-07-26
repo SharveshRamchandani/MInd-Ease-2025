@@ -1,18 +1,18 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MotivationalQuote } from "@/components/wellness/motivational-quote";
 import { CopingStrategies } from "@/components/wellness/coping-strategies";
-import { BookOpen, MessageCircle, BarChart3, Plus } from "lucide-react";
+import { MessageCircle, BarChart3, Plus } from "lucide-react";
 import heroImage from "@/assets/hero-wellness.jpg";
 
-export default function Home() {
+export default function Home(): React.JSX.Element {
   const [todaysMood, setTodaysMood] = useState<string | null>(null);
 
   // Mock data - will be replaced with real data from Firebase
-  const recentMoods = ["😊", "😐", "😄"];
-  const streakCount = 7;
+  const recentMoods: string[] = ["😊", "😐", "😄"];
+  const streakCount: number = 7;
 
   return (
     <div className="min-h-screen pb-20 p-4">
@@ -26,7 +26,7 @@ export default function Home() {
           />
           <div className="absolute inset-0 bg-gradient-primary/80 flex items-center justify-center">
             <div className="text-center text-primary-foreground">
-              <h1 className="text-2xl font-bold mb-2">Welcome to Serenity</h1>
+              <h1 className="text-2xl font-bold mb-2">Welcome to Mind-Ease</h1>
               <p className="text-primary-foreground/90">Your personal wellness companion</p>
             </div>
           </div>
@@ -116,7 +116,7 @@ export default function Home() {
         </div>
 
         {/* Coping Strategies */}
-        <CopingStrategies />
+        <CopingStrategies currentMood={todaysMood} />
       </div>
     </div>
   );
