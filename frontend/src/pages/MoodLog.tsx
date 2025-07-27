@@ -53,7 +53,7 @@ export default function MoodLog() {
           <div className="hidden lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start">
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-6">
-                <Link to="/">
+                <Link to="/home">
                   <Button variant="ghost" size="sm">
                     <ArrowLeft className="w-4 h-4" />
                   </Button>
@@ -87,7 +87,7 @@ export default function MoodLog() {
           {/* Mobile Layout */}
           <div className="lg:hidden max-w-md mx-auto space-y-6">
             <div className="flex items-center gap-3 mb-6">
-              <Link to="/">
+              <Link to="/home">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="w-4 h-4" />
                 </Button>
@@ -126,7 +126,7 @@ export default function MoodLog() {
         <div className="hidden lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start">
           <div className="space-y-6">
             <div className="flex items-center gap-3 mb-6">
-              <Link to="/">
+              <Link to="/home">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="w-4 h-4" />
                 </Button>

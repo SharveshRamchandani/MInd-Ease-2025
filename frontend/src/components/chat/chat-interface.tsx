@@ -21,7 +21,7 @@ export const ChatInterface = ({ onSendMessage, isLoading = false }: ChatInterfac
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
-      content: "Hello! I'm here to support your mental wellness journey. How are you feeling today? Feel free to share anything that's on your mind.",
+      content: "Hello! I'm Solari, your AI wellness companion. I'm here to support your mental wellness journey. How are you feeling today? Feel free to share anything that's on your mind.",
       sender: "ai",
       timestamp: new Date(),
     }

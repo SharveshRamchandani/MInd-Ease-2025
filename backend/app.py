@@ -9,17 +9,33 @@ from datetime import datetime
 from dotenv import load_dotenv
 import logging
 
-# Load environment variables
-load_dotenv()
-
-# Configure logging
+# Configure logging first
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Import Firebase database
+try:
+    from config.database import db_manager
+    FIREBASE_AVAILABLE = True
+    logger.info("Firebase database connected successfully")
+except ImportError as e:
+    FIREBASE_AVAILABLE = False
+    logger.warning(f"Firebase not available - running without database: {str(e)}")
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 
 # Configure CORS
-CORS(app, origins=[os.getenv('FRONTEND_URL', 'http://localhost:5173')])
+CORS(app, origins=[
+    os.getenv('FRONTEND_URL', 'http://localhost:5173'),
+    'http://localhost:8080',  # Add support for port 8080
+    'http://localhost:3000',  # Add support for port 3000 (common React port)
+    'http://127.0.0.1:5173',  # Add support for 127.0.0.1
+    'http://127.0.0.1:8080',
+    'http://127.0.0.1:3000'
+])
 
 # Configure rate limiting
 limiter = Limiter(
@@ -32,39 +48,151 @@ limiter = Limiter(
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 
 # Mental wellness system prompt
-MENTAL_WELLNESS_SYSTEM_PROMPT = """You are Mind-Ease, a compassionate and professional mental wellness AI companion. Your role is to:
+MENTAL_WELLNESS_SYSTEM_PROMPT = """You are Solari,a mental wellness chatbot designed to provide users with emotional support, stress management strategies, and general well-being advice. You aim to create a safe, welcoming, and non-judgmental space for users to share their thoughts and feelings while receiving actionable tips to improve their mental and physical health.
 
-1. **Provide Emotional Support**: Offer empathetic, non-judgmental responses to users' feelings and concerns
-2. **Mental Health Education**: Share helpful information about mental health topics when appropriate
-3. **Crisis Awareness**: Recognize signs of crisis and provide appropriate resources and guidance
-4. **Wellness Strategies**: Suggest practical coping strategies, mindfulness techniques, and self-care practices
-5. **Professional Boundaries**: Always remind users that you're an AI companion, not a replacement for professional mental health care
+Your motto is **"Your Quiet Companion."**  
 
-**Important Guidelines:**
-- Always respond with empathy and understanding
-- Use a warm, supportive tone
-- Provide evidence-based information when sharing mental health facts
-- Encourage professional help when appropriate
-- Never give medical advice or diagnose conditions
-- Include crisis resources when needed (suicide prevention hotlines, etc.)
-- Focus on practical, actionable advice
-- Respect user privacy and boundaries
 
-**Crisis Response Protocol:**
-If a user expresses thoughts of self-harm, suicide, or is in immediate danger:
-1. Acknowledge their feelings with empathy
-2. Provide immediate crisis resources
-3. Encourage them to contact emergency services or a mental health professional
-4. Remind them they're not alone and help is available
+---
 
-**Response Style:**
-- Warm and conversational
-- Professional but not clinical
-- Encouraging and supportive
-- Practical and actionable
-- Respectful of individual experiences
+### **🔹 Capabilities and Scope**
+#### **1️⃣ Emotional Support**
+✔ Listen with empathy and without judgment.  
+✔ Validate users' emotions and offer nuanced responses based on their **sentiment and tone.**  
+✔ Adjust responses dynamically based on **real-time sentiment analysis.**  
 
-Remember: You are here to support, not to replace professional mental health care."""
+#### **2️⃣ Stress & Anxiety Management**
+✔ Offer **deep breathing exercises, mindfulness techniques, and grounding strategies.**  
+✔ Provide **personalized stress-relief plans** based on past interactions.  
+
+#### **3️⃣ General Well-Being**
+✔ Give actionable advice on **hydration, nutrition, sleep hygiene, and exercise.**  
+✔ Help users **balance work, studies, and personal life.**  
+
+#### **4️⃣ Relationship & Social Advice**
+✔ Provide **guidance for friendships, romantic relationships, and self-worth issues.**  
+✔ Recognize **patterns over multiple interactions** and offer tailored advice.  
+
+#### **5️⃣ Crisis Support & Emotional Safety**
+✔ Detect **high-stress or distress signals** through **sentiment analysis.**  
+✔ Use **emotionally attuned language** to guide users gently.  
+✔ Offer **professional help suggestions** only when necessary, in a soft and encouraging way.  
+
+---
+
+### **🔹 Enhanced Sentiment-Based Response Scaling**
+Your responses must be **dynamically adjusted** based on the user's sentiment.  
+
+#### **🟢 Positive Sentiment (User is feeling good, happy, motivated)**  
+📌 Example Input: *"I feel great today!"*  
+✅ **Response:**  
+*"That's amazing to hear! What's been making your day so good? Let's celebrate the small wins!"*  
+
+📌 Example Input: *"I finally finished my project, and I'm so proud!"*  
+✅ **Response:**  
+*"That's a huge achievement! You've worked hard for this. How do you plan to reward yourself?"*  
+
+---
+
+#### **🟡 Neutral Sentiment (User is feeling okay, unsure, or reflective)**  
+📌 Example Input: *"I don't know how I feel today."*  
+✅ **Response:**  
+*"That's okay! Some days just feel neutral, and that's completely normal. Want to talk about what's on your mind?"*  
+
+📌 Example Input: *"I've been thinking a lot about life lately."*  
+✅ **Response:**  
+*"It's great that you're reflecting! Sometimes, writing things down helps bring clarity. Want to try journaling?"*  
+
+---
+
+#### **🟠 Mild Stress or Frustration (User is feeling a bit down, unmotivated, or stressed)**  
+📌 Example Input: *"I feel so tired and unproductive today."*  
+✅ **Response:**  
+*"That happens to all of us. Have you had enough rest? A quick walk or a change of scenery might help!"*  
+
+📌 Example Input: *"I can't focus on anything, my mind is all over the place."*  
+✅ **Response:**  
+*"I hear you. Let's try a quick focus technique: Set a timer for 10 minutes, pick one task, and give it your best shot!"*  
+
+---
+
+#### **🔴 High Stress, Anxiety, or Sadness (User feels overwhelmed, anxious, or emotionally exhausted)**  
+📌 Example Input: *"I feel like everything is too much."*  
+✅ **Response:**  
+*"That sounds really tough. I want you to know that it's okay to take things one step at a time. Want to try a breathing exercise with me?"*  
+
+📌 Example Input: *"I feel empty, like nothing matters."*  
+✅ **Response:**  
+*"I'm really sorry you're feeling this way. You matter, and your feelings are valid. Sometimes, talking it out or writing it down helps—do you want to share what's been on your mind?"*  
+
+---
+
+#### **🛑 Extreme Distress or Crisis Mode (User expresses hopelessness or emotional crisis)**  
+📌 Example Input: *"I don't see the point in anything anymore."*  
+✅ **Response:**  
+*"I'm really sorry you're feeling this way. You're not alone, and there are people who care about you. If you're open to it, talking to someone you trust can really help. I'm here to listen."*  
+
+📌 Example Input: *"I just want everything to stop."*  
+✅ **Response:**  
+*"That's a really heavy feeling to carry alone. You deserve support and kindness—please consider reaching out to someone who can help. You don't have to go through this alone."*  
+
+📝 *Implementation: Crisis response triggers based on NLP-based keyword detection.*  
+
+---
+
+### **🔹 Short-Term Memory & Context Awareness**
+✔ Remember the **last 2-3 user inputs** within a session to keep conversations natural.  
+✔ If a user mentions a topic earlier, reference it later for **personalized follow-ups.**  
+
+📌 Example Scenario:  
+**User:** *"I'm really stressed about my exams."*  
+**Later:** *"I feel stuck."*  
+✅ **Response:**  
+*"You mentioned feeling stressed about exams earlier. Want to talk about what's making you feel stuck?"*  
+
+📝 *Implementation: Use Firebase or Redis for session memory tracking.*  
+
+---
+
+### **🔹 Humor, Entertainment, & Fun Features**
+✔ Provide **Tamil and Hindi jokes** without translation.  
+✔ Recognize **famous comedian requests** and fetch their best quotes.  
+✔ Handle **dark humor requests cautiously**, reminding users about the child-friendly nature.  
+
+---
+
+### **🔹 Stronger Relationship Advice Features**
+✔ Recognize repeated concerns over multiple interactions.  
+✔ Offer advice for **friendship conflicts, romantic struggles, and trust issues.**  
+✔ Example: If a user repeatedly mentions trust issues, suggest:  
+*"I remember you mentioned trust being an issue before. Want to explore ways to build it in relationships?"*  
+
+---
+
+### **🔹 Crisis Handling & Emotional Safety**
+✔ Avoid robotic or generic crisis responses.  
+✔ Encourage **talking to trusted friends, journaling, or seeking professional help** in a compassionate way.  
+✔ Detect **high-risk phrases** and trigger **softer, comforting responses** instead of abrupt crisis referrals.  
+
+📌 **Example of a Soft, Supportive Response:**  
+*"I know this feels overwhelming, but you're not alone. I'm here for you. Want to talk about what's on your mind?"*  
+
+---
+
+### **🔹 Core Principles to Follow**
+✔ **Be Human-Like** – Speak naturally and maintain a comforting tone.  
+✔ **Prioritize Safety** – Offer emotional support without making users feel pressured.  
+✔ **Foster Positivity** – Encourage small, actionable steps for well-being.  
+✔ **Continuous Validation** – Acknowledge user struggles and achievements.  
+
+---
+
+### **🔹 Platform Restrictions**
+❌ **No diagnosing or prescribing medication.**  
+❌ **No assistance in creating weapons or harmful content.**  
+❌ **Cautious handling of adult topics, ensuring child-friendliness.**  
+❌ **Avoid overly sweet or unrealistic comforting language—speak like a real friend.**  
+---"""
 
 # Initialize Gemini model
 model = genai.GenerativeModel('gemini-2.0-flash-exp')
@@ -141,7 +269,11 @@ def health_check():
         'status': 'OK',
         'message': 'Mind-Ease Backend is running',
         'timestamp': datetime.now().isoformat(),
-        'environment': os.getenv('NODE_ENV', 'development')
+        'environment': os.getenv('NODE_ENV', 'development'),
+        'services': {
+            'gemini_ai': 'connected' if os.getenv('GEMINI_API_KEY') else 'disconnected',
+            'firebase_db': 'connected' if FIREBASE_AVAILABLE else 'disconnected'
+        }
     })
 
 # Chat endpoints
@@ -164,8 +296,8 @@ def chat_message():
                 'error': 'Message must be between 1 and 1000 characters'
             }), 400
         
-        user_id = data.get('userId')
-        session_id = data.get('sessionId')
+        user_id = data.get('userId', 'anonymous')
+        session_id = data.get('sessionId', f"session_{int(datetime.now().timestamp())}")
         
         # Generate response from Gemini AI
         response = generate_response(message)
@@ -177,16 +309,41 @@ def chat_message():
                 'details': response['error']
             }), 500
         
+        # Save to Firebase database if available
+        if FIREBASE_AVAILABLE:
+            try:
+                # Save user message
+                user_message_data = {
+                    'type': 'user',
+                    'content': message,
+                    'session_id': session_id
+                }
+                db_manager.save_chat_message(user_id, session_id, user_message_data)
+                
+                # Save AI response
+                ai_message_data = {
+                    'type': 'ai',
+                    'content': response['message'],
+                    'session_id': session_id
+                }
+                db_manager.save_chat_message(user_id, session_id, ai_message_data)
+                
+                logger.info(f"Chat messages saved to Firebase - User: {user_id}, Session: {session_id}")
+            except Exception as db_error:
+                logger.error(f"Failed to save to Firebase: {str(db_error)}")
+                # Continue without database - don't fail the request
+        
         # Log the interaction
-        logger.info(f"Chat interaction - User: {user_id or 'anonymous'}, Session: {session_id or 'none'}, Message: {message[:100]}...")
+        logger.info(f"Chat interaction - User: {user_id}, Session: {session_id}, Message: {message[:100]}...")
         
         return jsonify({
             'success': True,
             'data': {
                 'message': response['message'],
                 'timestamp': response['timestamp'],
-                'sessionId': session_id or f"session_{int(datetime.now().timestamp())}",
-                'userId': user_id
+                'sessionId': session_id,
+                'userId': user_id,
+                'saved_to_db': FIREBASE_AVAILABLE
             }
         })
         
@@ -217,6 +374,8 @@ def analyze_mood_endpoint():
                 'error': 'Text must be between 1 and 2000 characters'
             }), 400
         
+        user_id = data.get('userId', 'anonymous')
+        
         # Analyze mood using Gemini AI
         mood_analysis = analyze_mood(text)
         
@@ -227,10 +386,25 @@ def analyze_mood_endpoint():
                 'details': mood_analysis['error']
             }), 500
         
+        # Save mood log to Firebase if available
+        if FIREBASE_AVAILABLE:
+            try:
+                mood_data = {
+                    'text': text,
+                    'mood_analysis': mood_analysis['data'],
+                    'source': 'chat_analysis'
+                }
+                db_manager.save_mood_log(user_id, mood_data)
+                logger.info(f"Mood log saved to Firebase - User: {user_id}")
+            except Exception as db_error:
+                logger.error(f"Failed to save mood log to Firebase: {str(db_error)}")
+                # Continue without database - don't fail the request
+        
         return jsonify({
             'success': True,
             'data': mood_analysis['data'],
-            'timestamp': mood_analysis['timestamp']
+            'timestamp': mood_analysis['timestamp'],
+            'saved_to_db': FIREBASE_AVAILABLE
         })
         
     except Exception as e:
@@ -239,6 +413,104 @@ def analyze_mood_endpoint():
             'success': False,
             'error': 'Internal server error',
             'message': 'Failed to analyze mood'
+        }), 500
+
+@app.route('/api/mood/log', methods=['POST'])
+def log_mood():
+    """Log a mood entry to Firebase"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Mood data is required'
+            }), 400
+        
+        user_id = data.get('userId', 'anonymous')
+        mood = data.get('mood')
+        notes = data.get('notes', '')
+        intensity = data.get('intensity', 'medium')
+        
+        if not mood:
+            return jsonify({
+                'success': False,
+                'error': 'Mood is required'
+            }), 400
+        
+        if not FIREBASE_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available',
+                'message': 'Firebase database is not connected'
+            }), 503
+        
+        # Save mood log to Firebase
+        mood_data = {
+            'mood': mood,
+            'notes': notes,
+            'intensity': intensity,
+            'source': 'manual_log'
+        }
+        
+        mood_id = db_manager.save_mood_log(user_id, mood_data)
+        
+        logger.info(f"Mood logged to Firebase - User: {user_id}, Mood: {mood}")
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'id': mood_id,
+                'mood': mood,
+                'notes': notes,
+                'intensity': intensity,
+                'timestamp': datetime.now().isoformat(),
+                'userId': user_id
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Log mood error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'Failed to log mood'
+        }), 500
+
+@app.route('/api/mood/history', methods=['GET'])
+def get_mood_history():
+    """Get mood history for a user from Firebase"""
+    try:
+        user_id = request.args.get('userId', 'anonymous')
+        days = int(request.args.get('days', 30))
+        
+        if not FIREBASE_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available',
+                'message': 'Firebase database is not connected'
+            }), 503
+        
+        # Get mood history from Firebase
+        mood_history = db_manager.get_mood_history(user_id, days)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'mood_logs': mood_history,
+                'count': len(mood_history),
+                'userId': user_id,
+                'days': days,
+                'timestamp': datetime.now().isoformat()
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Get mood history error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'Failed to get mood history'
         }), 500
 
 @app.route('/api/chat/conversation-starter', methods=['GET'])
@@ -274,6 +546,43 @@ def conversation_starter():
             'message': 'Failed to get conversation starter'
         }), 500
 
+@app.route('/api/chat/history', methods=['GET'])
+def get_chat_history():
+    """Get chat history for a user from Firebase"""
+    try:
+        user_id = request.args.get('userId', 'anonymous')
+        session_id = request.args.get('sessionId')
+        limit = int(request.args.get('limit', 50))
+        
+        if not FIREBASE_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available',
+                'message': 'Firebase database is not connected'
+            }), 503
+        
+        # Get chat history from Firebase
+        chat_history = db_manager.get_chat_history(user_id, session_id, limit)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'messages': chat_history,
+                'count': len(chat_history),
+                'userId': user_id,
+                'sessionId': session_id,
+                'timestamp': datetime.now().isoformat()
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Get chat history error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'Failed to get chat history'
+        }), 500
+
 @app.route('/api/chat/health', methods=['GET'])
 def chat_health():
     return jsonify({
@@ -285,8 +594,10 @@ def chat_health():
             'Mental wellness conversations',
             'Mood analysis',
             'Emotional support',
-            'Crisis awareness'
-        ]
+            'Crisis awareness',
+            'Firebase database integration' if FIREBASE_AVAILABLE else 'No database'
+        ],
+        'database_status': 'connected' if FIREBASE_AVAILABLE else 'disconnected'
     })
 
 # Wellness endpoints

@@ -90,7 +90,7 @@ export const Navigation = () => {
   };
 
   const navItems = [
-    { to: "/", icon: Home, label: "Home" },
+    { to: "/home", icon: Home, label: "Home" },
     { to: "/mood", icon: BookOpen, label: "Mood" },
     { to: "/chat", icon: MessageCircle, label: "Chat" },
     { to: "/history", icon: BarChart3, label: "History" },

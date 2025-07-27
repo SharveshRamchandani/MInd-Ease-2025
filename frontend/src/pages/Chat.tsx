@@ -8,27 +8,38 @@ import { Link } from "react-router-dom";
 export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
 
-  // Mock AI response function - replace with actual Gemini API call
+  // Real AI response function - connects to Flask backend with Gemini AI
   const handleSendMessage = async (message: string): Promise<string> => {
     setIsLoading(true);
     
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const response = await fetch('http://localhost:5000/api/chat/message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: message,
+          userId: 'anonymous', // You can make this dynamic later
+          sessionId: `session_${Date.now()}` // You can manage sessions better later
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
       
-      // Mock responses based on message content
-      const responses = [
-        "I understand how you're feeling. It's completely normal to have ups and downs. Can you tell me more about what's been on your mind today?",
-        "Thank you for sharing that with me. Your feelings are valid. Have you tried any breathing exercises or mindfulness techniques that might help?",
-        "It sounds like you're going through a challenging time. Remember that you're not alone in this. What usually helps you feel more grounded?",
-        "I hear you, and I want you to know that reaching out shows real strength. What would feel most supportive for you right now?",
-        "That's a very human experience you're describing. Sometimes just naming our feelings can be the first step toward feeling better. How are you taking care of yourself today?",
-      ];
-      
-      return responses[Math.floor(Math.random() * responses.length)];
+      if (data.success) {
+        return data.data.message;
+      } else {
+        throw new Error(data.error || 'Failed to get response from AI');
+      }
       
     } catch (error) {
-      return "I'm sorry, I'm having trouble responding right now. Please try again in a moment.";
+      console.error('Error sending message:', error);
+      return "I'm sorry, I'm having trouble connecting to my AI brain right now. Please check if the backend server is running and try again.";
     } finally {
       setIsLoading(false);
     }
@@ -42,7 +53,7 @@ export default function Chat() {
           {/* Left Sidebar - Chat Info */}
           <div className="lg:col-span-1 space-y-6">
             <div className="flex items-center gap-3 mb-6">
-              <Link to="/">
+              <Link to="/home">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="w-4 h-4" />
                 </Button>
@@ -56,12 +67,12 @@ export default function Chat() {
                   <Brain className="w-5 h-5 text-primary-foreground" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold">AI Wellness Companion</h2>
+                  <h2 className="text-lg font-semibold">Solari</h2>
                   <p className="text-sm text-muted-foreground">Here to listen and support</p>
                 </div>
               </div>
               <p className="text-sm text-muted-foreground">
-                Your AI companion is trained to provide emotional support and wellness guidance. 
+                Your AI companion Solari is trained to provide emotional support and wellness guidance. 
                 Feel free to share anything that's on your mind.
               </p>
             </Card>
@@ -103,7 +114,7 @@ export default function Chat() {
         {/* Mobile Layout */}
         <div className="lg:hidden max-w-md mx-auto h-full">
           <div className="flex items-center gap-3 mb-6">
-            <Link to="/">
+            <Link to="/home">
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-4 h-4" />
               </Button>
@@ -113,7 +124,7 @@ export default function Chat() {
                 <Brain className="w-4 h-4 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-lg font-semibold">AI Wellness Companion</h1>
+                <h1 className="text-lg font-semibold">Solari</h1>
                 <p className="text-xs text-muted-foreground">Here to listen and support</p>
               </div>
             </div>
