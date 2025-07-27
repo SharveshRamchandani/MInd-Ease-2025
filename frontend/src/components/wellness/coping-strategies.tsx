@@ -92,10 +92,10 @@ export const CopingStrategies = ({ currentMood }: CopingStrategiesProps) => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="w-full">
       <div className="text-center mb-6">
-        <h2 className="text-xl font-semibold mb-2">Coping Strategies</h2>
-        <p className="text-muted-foreground text-sm">
+        <h2 className="text-xl lg:text-2xl font-semibold mb-2">Coping Strategies</h2>
+        <p className="text-muted-foreground text-sm lg:text-base">
           {currentMood 
             ? `Personalized suggestions for feeling ${currentMood}`
             : "Helpful techniques for emotional wellness"
@@ -103,7 +103,58 @@ export const CopingStrategies = ({ currentMood }: CopingStrategiesProps) => {
         </p>
       </div>
 
-      <div className="grid gap-4">
+      {/* Desktop Layout - Full width flex row */}
+      <div className="hidden lg:flex lg:flex-row lg:gap-6 lg:justify-center lg:items-stretch">
+        {relevantStrategies.map((strategy) => {
+          const Icon = strategy.icon;
+          const isExpanded = expandedStrategy === strategy.id;
+
+          return (
+            <Card 
+              key={strategy.id} 
+              className="flex-1 p-6 lg:p-8 shadow-card transition-gentle hover:shadow-glow cursor-pointer"
+              onClick={() => toggleStrategy(strategy.id)}
+            >
+              <div className="flex flex-col items-center text-center h-full">
+                <div className={`p-3 lg:p-4 rounded-full bg-${strategy.color} animate-gentle-bounce mb-4 lg:mb-6`}>
+                  <Icon className="w-6 h-6 lg:w-8 lg:h-8" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold mb-3 lg:mb-4 text-lg lg:text-xl">{strategy.title}</h3>
+                  <p className="text-sm lg:text-base text-muted-foreground mb-4 lg:mb-6">
+                    {strategy.description}
+                  </p>
+                  
+                  {isExpanded && (
+                    <div className="space-y-3 lg:space-y-4 mt-4 lg:mt-6 animate-gentle-bounce">
+                      <h4 className="text-sm lg:text-base font-medium">Steps:</h4>
+                      <ol className="space-y-2 lg:space-y-3 text-left">
+                        {strategy.instructions.map((instruction, index) => (
+                          <li key={index} className="text-sm lg:text-base text-muted-foreground flex gap-2">
+                            <span className="text-primary font-medium flex-shrink-0">{index + 1}.</span>
+                            <span>{instruction}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                </div>
+                
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="mt-4 lg:mt-6 text-primary hover:bg-primary/10 text-sm lg:text-base"
+                >
+                  {isExpanded ? "Show Less" : "Try This"}
+                </Button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Mobile Layout - Keep exactly as is */}
+      <div className="lg:hidden space-y-4 max-w-md mx-auto">
         {relevantStrategies.map((strategy) => {
           const Icon = strategy.icon;
           const isExpanded = expandedStrategy === strategy.id;

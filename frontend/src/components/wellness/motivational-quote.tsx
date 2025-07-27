@@ -56,27 +56,29 @@ export const MotivationalQuote = () => {
   }, []);
 
   return (
-    <Card className="p-6 bg-gradient-sunset shadow-glow animate-float">
-      <div className={`transition-gentle ${isAnimating ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
-        <div className="flex items-start justify-between mb-4">
-          <h3 className="font-semibold text-accent-foreground">Daily Inspiration</h3>
+    <Card className="p-6 lg:p-8 bg-gradient-sunset shadow-glow animate-float h-48 lg:h-56">
+      <div className={`transition-gentle h-full flex flex-col ${isAnimating ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
+        <div className="flex items-start justify-between mb-3">
+          <h3 className="text-lg lg:text-xl font-semibold text-accent-foreground">Daily Inspiration</h3>
           <Button
             variant="ghost"
             size="sm"
             onClick={getRandomQuote}
-            className="h-8 w-8 p-0 hover:bg-white/20"
+            className="h-8 w-8 p-0 hover:bg-white/20 flex-shrink-0"
           >
             <RefreshCw className="w-4 h-4 text-accent-foreground" />
           </Button>
         </div>
         
-        <blockquote className="text-accent-foreground/90 leading-relaxed mb-3 italic">
-          "{currentQuote.text}"
-        </blockquote>
-        
-        <cite className="text-accent-foreground/70 text-sm font-medium">
-          — {currentQuote.author}
-        </cite>
+        <div className="flex-1 flex flex-col justify-center">
+          <blockquote className="text-accent-foreground/90 leading-relaxed italic text-sm lg:text-base line-clamp-4 lg:line-clamp-5">
+            "{currentQuote.text}"
+          </blockquote>
+          
+          <cite className="text-accent-foreground/70 text-xs lg:text-sm font-medium mt-2 flex-shrink-0">
+            — {currentQuote.author}
+          </cite>
+        </div>
       </div>
     </Card>
   );

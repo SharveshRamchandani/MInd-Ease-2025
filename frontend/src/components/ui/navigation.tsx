@@ -11,17 +11,29 @@ const NavigationItem = ({ to, icon: Icon, label, isActive }: {
   isActive: boolean;
 }) => (
   <Link to={to}>
-    <Button
-      variant={isActive ? "default" : "ghost"}
-      size="sm"
-      className={cn(
-        "flex flex-col gap-1 h-auto py-2 px-3 transition-gentle",
-        isActive && "bg-gradient-primary shadow-glow"
-      )}
-    >
-      <Icon className="w-4 h-4" />
-      <span className="text-xs">{label}</span>
-    </Button>
+    <div className={cn(
+      "flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 ease-in-out p-2 rounded-xl",
+      isActive 
+        ? "bg-primary/20" 
+        : "hover:bg-primary/10"
+    )}>
+      <div className={cn(
+        "text-xl flex items-center justify-center",
+        isActive 
+          ? "text-primary" 
+          : "text-muted-foreground"
+      )}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <span className={cn(
+        "text-xs font-medium text-center",
+        isActive 
+          ? "text-primary" 
+          : "text-muted-foreground"
+      )}>
+        {label}
+      </span>
+    </div>
   </Link>
 );
 
@@ -47,8 +59,8 @@ export const Navigation = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-card/80 backdrop-blur-md border-t border-border shadow-soft z-50">
-      <div className="flex items-center justify-around py-2 px-4 max-w-md mx-auto">
+    <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 bg-card/90 backdrop-blur-md border border-border/20 rounded-3xl shadow-lg w-[calc(100%-2rem)] max-w-4xl">
+      <nav className="p-3 px-4 flex justify-around items-center w-full">
         {navItems.map((item) => (
           <NavigationItem
             key={item.to}
@@ -58,16 +70,21 @@ export const Navigation = () => {
             isActive={location.pathname === item.to}
           />
         ))}
-        <Button
-          variant="ghost"
-          size="sm"
+        
+        <div 
+          className={cn(
+            "flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 ease-in-out p-2 rounded-xl hover:bg-primary/10"
+          )}
           onClick={toggleTheme}
-          className="flex flex-col gap-1 h-auto py-2 px-3"
         >
-          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          <span className="text-xs">Theme</span>
-        </Button>
-      </div>
-    </nav>
+          <div className="text-xl flex items-center justify-center text-muted-foreground">
+            {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </div>
+          <span className="text-xs font-medium text-center text-muted-foreground">
+            Theme
+          </span>
+        </div>
+      </nav>
+    </div>
   );
 };
