@@ -28,11 +28,6 @@ export default function MoodLog() {
         title: "Mood saved successfully!",
         description: "Your daily check-in has been recorded.",
       });
-
-      // Navigate back to home after a delay
-      setTimeout(() => {
-        navigate("/");
-      }, 2000);
       
     } catch (error) {
       toast({

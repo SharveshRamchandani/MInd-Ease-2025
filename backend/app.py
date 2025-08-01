@@ -236,7 +236,7 @@ def analyze_mood(text):
         }}
 
         Text to analyze: "{text}" """
-
+    
         response = model.generate_content(prompt)
         
         # Try to parse JSON response
@@ -544,6 +544,223 @@ def conversation_starter():
             'success': False,
             'error': 'Internal server error',
             'message': 'Failed to get conversation starter'
+        }), 500
+
+@app.route('/api/conversations', methods=['GET'])
+def get_conversations():
+    """Get all conversations for a user"""
+    try:
+        user_id = request.args.get('userId', 'anonymous')
+        limit = int(request.args.get('limit', 20))
+        
+        if not FIREBASE_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available',
+                'message': 'Firebase database is not connected'
+            }), 503
+        
+        # Get conversations from Firebase
+        conversations = db_manager.get_conversations(user_id, limit)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'conversations': conversations,
+                'count': len(conversations),
+                'userId': user_id,
+                'timestamp': datetime.now().isoformat()
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Get conversations error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'Failed to get conversations'
+        }), 500
+
+@app.route('/api/conversations', methods=['POST'])
+def create_conversation():
+    """Create a new conversation"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Data is required'
+            }), 400
+        
+        user_id = data.get('userId', 'anonymous')
+        title = data.get('title')
+        
+        if not FIREBASE_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available',
+                'message': 'Firebase database is not connected'
+            }), 503
+        
+        # Create conversation in Firebase
+        conversation_id = db_manager.create_conversation(user_id, title)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'conversation_id': conversation_id,
+                'userId': user_id,
+                'timestamp': datetime.now().isoformat()
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Create conversation error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'Failed to create conversation'
+        }), 500
+
+@app.route('/api/conversations/<conversation_id>', methods=['GET'])
+def get_conversation(conversation_id):
+    """Get a specific conversation"""
+    try:
+        if not FIREBASE_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available',
+                'message': 'Firebase database is not connected'
+            }), 503
+        
+        # Get conversation from Firebase
+        conversation = db_manager.get_conversation(conversation_id)
+        
+        if not conversation:
+            return jsonify({
+                'success': False,
+                'error': 'Conversation not found'
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'data': conversation
+        })
+        
+    except Exception as e:
+        logger.error(f"Get conversation error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'Failed to get conversation'
+        }), 500
+
+@app.route('/api/conversations/<conversation_id>', methods=['DELETE'])
+def delete_conversation(conversation_id):
+    """Delete a conversation"""
+    try:
+        if not FIREBASE_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available',
+                'message': 'Firebase database is not connected'
+            }), 503
+        
+        # Delete conversation from Firebase
+        success = db_manager.delete_conversation(conversation_id)
+        
+        if not success:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to delete conversation'
+            }), 500
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'conversation_id': conversation_id,
+                'message': 'Conversation deleted successfully'
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Delete conversation error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'Failed to delete conversation'
+        }), 500
+
+@app.route('/api/conversations/<conversation_id>/messages', methods=['POST'])
+def add_message_to_conversation(conversation_id):
+    """Add a message to a conversation"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'message' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Message is required'
+            }), 400
+        
+        message = data['message'].strip()
+        if not message or len(message) > 1000:
+            return jsonify({
+                'success': False,
+                'error': 'Message must be between 1 and 1000 characters'
+            }), 400
+        
+        user_id = data.get('userId', 'anonymous')
+        
+        if not FIREBASE_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available',
+                'message': 'Firebase database is not connected'
+            }), 503
+        
+        # Generate response from Gemini AI
+        response = generate_response(message)
+        
+        if not response['success']:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to generate response',
+                'details': response['error']
+            }), 500
+        
+        # Add user message to conversation
+        user_message_data = {
+            'type': 'user',
+            'content': message
+        }
+        db_manager.update_conversation(conversation_id, user_message_data)
+        
+        # Add AI response to conversation
+        ai_message_data = {
+            'type': 'ai',
+            'content': response['message']
+        }
+        db_manager.update_conversation(conversation_id, ai_message_data)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'message': response['message'],
+                'timestamp': response['timestamp'],
+                'conversation_id': conversation_id,
+                'userId': user_id,
+                'saved_to_db': FIREBASE_AVAILABLE
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Add message to conversation error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'Failed to add message to conversation'
         }), 500
 
 @app.route('/api/chat/history', methods=['GET'])

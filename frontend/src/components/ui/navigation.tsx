@@ -1,8 +1,9 @@
-import { Link, useLocation } from "react-router-dom";
-import { Home, MessageCircle, BarChart3, BookOpen, Moon, Sun, Monitor } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Home, MessageCircle, BarChart3, BookOpen, Moon, Sun, Monitor, LogOut } from "lucide-react";
 import { Button } from "./button";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,13 +11,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const NavigationItem = ({ to, icon: Icon, label, isActive }: {
-  to: string;
+const NavigationItem = ({ to, icon: Icon, label, isActive, onClick }: {
+  to?: string;
   icon: any;
   label: string;
-  isActive: boolean;
-}) => (
-  <Link to={to}>
+  isActive?: boolean;
+  onClick?: () => void;
+}) => {
+  const content = (
     <div className={cn(
       "flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 ease-in-out p-2 rounded-xl",
       isActive 
@@ -40,8 +42,14 @@ const NavigationItem = ({ to, icon: Icon, label, isActive }: {
         {label}
       </span>
     </div>
-  </Link>
-);
+  );
+
+  if (onClick) {
+    return <div onClick={onClick}>{content}</div>;
+  }
+
+  return <Link to={to!}>{content}</Link>;
+};
 
 const ThemeIcon = ({ theme }: { theme: string }) => {
   switch (theme) {
@@ -58,6 +66,8 @@ const ThemeIcon = ({ theme }: { theme: string }) => {
 
 export const Navigation = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
   const [currentTheme, setCurrentTheme] = useState('system');
   const [isOpen, setIsOpen] = useState(false);
 
@@ -86,6 +96,15 @@ export const Navigation = () => {
       root.classList.add(systemTheme);
     } else {
       root.classList.add(theme);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate('/');
+    } catch (error) {
+      console.error('Error signing out:', error);
     }
   };
 
@@ -169,6 +188,13 @@ export const Navigation = () => {
             })}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Logout Button */}
+        <NavigationItem
+          icon={LogOut}
+          label="Logout"
+          onClick={handleLogout}
+        />
       </nav>
     </div>
   );

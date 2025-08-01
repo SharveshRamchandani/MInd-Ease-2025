@@ -145,7 +145,7 @@ export default function History() {
           {/* Left Column - Stats and Overview */}
           <div className="lg:col-span-4 space-y-6">
             <div className="flex items-center gap-3 mb-6">
-              <Link to="/home">
+              <Link to="/">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="w-4 h-4" />
                 </Button>
@@ -249,7 +249,7 @@ export default function History() {
         {/* Mobile Layout */}
         <div className="lg:hidden max-w-md mx-auto space-y-6">
           <div className="flex items-center gap-3 mb-6">
-            <Link to="/home">
+            <Link to="/">
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-4 h-4" />
               </Button>

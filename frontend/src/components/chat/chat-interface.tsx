@@ -15,17 +15,12 @@ interface Message {
 interface ChatInterfaceProps {
   onSendMessage: (message: string) => Promise<string>;
   isLoading?: boolean;
+  initialMessages?: any[];
+  messages: Message[];
+  onAddMessage: (message: Message) => void;
 }
 
-export const ChatInterface = ({ onSendMessage, isLoading = false }: ChatInterfaceProps) => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      content: "Hello! I'm Solari, your AI wellness companion. I'm here to support your mental wellness journey. How are you feeling today? Feel free to share anything that's on your mind.",
-      sender: "ai",
-      timestamp: new Date(),
-    }
-  ]);
+export const ChatInterface = ({ onSendMessage, isLoading = false, initialMessages = [], messages, onAddMessage }: ChatInterfaceProps) => {
   const [inputMessage, setInputMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -42,13 +37,13 @@ export const ChatInterface = ({ onSendMessage, isLoading = false }: ChatInterfac
     if (!inputMessage.trim() || isLoading) return;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       content: inputMessage,
       sender: "user",
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    onAddMessage(userMessage);
     setInputMessage("");
     setIsTyping(true);
 
@@ -57,23 +52,23 @@ export const ChatInterface = ({ onSendMessage, isLoading = false }: ChatInterfac
       
       setTimeout(() => {
         const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
+          id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           content: aiResponse,
           sender: "ai",
           timestamp: new Date(),
         };
-        setMessages(prev => [...prev, aiMessage]);
+        onAddMessage(aiMessage);
         setIsTyping(false);
       }, 1000); // Simulate typing delay
     } catch (error) {
       setIsTyping(false);
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         content: "I'm sorry, I'm having trouble responding right now. Please try again later.",
         sender: "ai",
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorMessage]);
+      onAddMessage(errorMessage);
     }
   };
 
@@ -85,8 +80,8 @@ export const ChatInterface = ({ onSendMessage, isLoading = false }: ChatInterfac
   };
 
   return (
-    <div className="flex flex-col h-full max-h-[70vh]">
-      <div className="flex-1 overflow-y-auto space-y-4 p-4">
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto space-y-3 p-3">
         {messages.map((message) => (
           <div
             key={message.id}
@@ -102,7 +97,7 @@ export const ChatInterface = ({ onSendMessage, isLoading = false }: ChatInterfac
             )}
             
             <Card className={cn(
-              "max-w-[70%] p-3 shadow-card",
+              "max-w-[70%] p-2.5 shadow-card",
               message.sender === "user" 
                 ? "bg-primary text-primary-foreground" 
                 : "bg-card"
@@ -131,7 +126,7 @@ export const ChatInterface = ({ onSendMessage, isLoading = false }: ChatInterfac
             <div className="flex-shrink-0 w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center">
               <Bot className="w-4 h-4 text-primary-foreground" />
             </div>
-            <Card className="p-3 shadow-card">
+            <Card className="p-2.5 shadow-card">
               <div className="flex gap-1">
                 <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
                 <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
@@ -143,14 +138,14 @@ export const ChatInterface = ({ onSendMessage, isLoading = false }: ChatInterfac
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-border p-4">
+      <div className="border-t border-border p-3">
         <div className="flex gap-2">
           <Textarea
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Share what's on your mind..."
-            className="resize-none min-h-[50px] max-h-[100px]"
+            className="resize-none min-h-[40px] max-h-[80px]"
             disabled={isLoading}
           />
           <Button

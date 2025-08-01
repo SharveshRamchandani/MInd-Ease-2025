@@ -13,6 +13,8 @@ interface CopingStrategy {
   mood?: string[];
 }
 
+
+
 const copingStrategies: CopingStrategy[] = [
   {
     id: "breathing",
@@ -202,6 +204,8 @@ export const CopingStrategies = ({ currentMood }: CopingStrategiesProps) => {
           );
         })}
       </div>
+
+
     </div>
   );
 };

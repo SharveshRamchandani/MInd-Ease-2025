@@ -48,8 +48,101 @@ class DatabaseManager:
             logger.error(f"Failed to update user {user_id}: {str(e)}")
             return False
     
+    def create_conversation(self, user_id: str, title: str = None) -> str:
+        """Create a new conversation"""
+        try:
+            conversation_data = {
+                'user_id': user_id,
+                'title': title or f"Conversation {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                'messages': [],
+                'created_at': datetime.now(),
+                'updated_at': datetime.now()
+            }
+            
+            doc_ref = self.db.collection(self.collections['conversations']).add(conversation_data)
+            logger.info(f"Conversation created with ID: {doc_ref[1].id}")
+            return doc_ref[1].id
+        except Exception as e:
+            logger.error(f"Failed to create conversation: {str(e)}")
+            raise
+
+    def update_conversation(self, conversation_id: str, message_data: Dict[str, Any]) -> bool:
+        """Add a message to an existing conversation"""
+        try:
+            # Get the current conversation
+            conversation_ref = self.db.collection(self.collections['conversations']).document(conversation_id)
+            conversation_doc = conversation_ref.get()
+            
+            if not conversation_doc.exists:
+                raise Exception("Conversation not found")
+            
+            conversation_data = conversation_doc.to_dict()
+            messages = conversation_data.get('messages', [])
+            
+            # Add the new message
+            message_data['timestamp'] = datetime.now()
+            messages.append(message_data)
+            
+            # Update the conversation
+            conversation_ref.update({
+                'messages': messages,
+                'updated_at': datetime.now()
+            })
+            
+            logger.info(f"Conversation {conversation_id} updated with new message")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update conversation: {str(e)}")
+            raise
+
+    def get_conversations(self, user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get all conversations for a user"""
+        try:
+            query = self.db.collection(self.collections['conversations'])\
+                .where('user_id', '==', user_id)\
+                .limit(limit)
+            
+            docs = query.stream()
+            conversations = []
+            
+            for doc in docs:
+                conversation_data = doc.to_dict()
+                conversation_data['id'] = doc.id
+                conversations.append(conversation_data)
+            
+            # Sort by updated_at in descending order (most recent first)
+            conversations.sort(key=lambda x: x.get('updated_at', datetime.min), reverse=True)
+            
+            return conversations
+        except Exception as e:
+            logger.error(f"Failed to get conversations for user {user_id}: {str(e)}")
+            return []
+
+    def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific conversation by ID"""
+        try:
+            doc = self.db.collection(self.collections['conversations']).document(conversation_id).get()
+            if doc.exists:
+                conversation_data = doc.to_dict()
+                conversation_data['id'] = doc.id
+                return conversation_data
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get conversation {conversation_id}: {str(e)}")
+            return None
+
+    def delete_conversation(self, conversation_id: str) -> bool:
+        """Delete a conversation"""
+        try:
+            self.db.collection(self.collections['conversations']).document(conversation_id).delete()
+            logger.info(f"Conversation {conversation_id} deleted")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete conversation {conversation_id}: {str(e)}")
+            return False
+
     def save_chat_message(self, user_id: str, session_id: str, message_data: Dict[str, Any]) -> str:
-        """Save a chat message to the database"""
+        """Save a chat message to the database (legacy method)"""
         try:
             message_data['user_id'] = user_id
             message_data['session_id'] = session_id

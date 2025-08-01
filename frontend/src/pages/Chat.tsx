@@ -1,27 +1,258 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChatInterface } from "@/components/chat/chat-interface";
+import { ConversationSidebar } from "@/components/chat/conversation-sidebar";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Brain, Heart, Shield, MessageCircle } from "lucide-react";
+import { ArrowLeft, Brain, Heart, Shield, MessageCircle, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
+
+interface Message {
+  id: string;
+  content: string;
+  sender: 'user' | 'ai';
+  timestamp: Date;
+}
 
 export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const { toast } = useToast();
 
-  // Real AI response function - connects to Flask backend with Gemini AI
+  // Initialize with welcome message only if no conversation is selected
+  useEffect(() => {
+    if (currentMessages.length === 0 && !currentConversationId) {
+      setCurrentMessages([{
+        id: `welcome-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        content: "Hello! I'm Solari, your AI wellness companion. I'm here to support your mental wellness journey. How are you feeling today? Feel free to share anything that's on your mind.",
+        sender: "ai",
+        timestamp: new Date(),
+      }]);
+    }
+  }, [currentConversationId]);
+
+  // Load conversations and create default conversation on component mount
+  useEffect(() => {
+    const initializeChat = async () => {
+      await loadConversations();
+    };
+    initializeChat();
+  }, []);
+
+  // Create default conversation if none exists after loading
+  useEffect(() => {
+    if (!isLoadingConversations && conversations.length === 0 && !isCreatingConversation) {
+      createNewConversation();
+    }
+  }, [isLoadingConversations, conversations.length, isCreatingConversation]);
+
+  const loadConversations = async () => {
+    if (isLoadingConversations) return; // Prevent multiple simultaneous loads
+    
+    setIsLoadingConversations(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/conversations?userId=anonymous');
+      const data = await response.json();
+      
+      if (data.success) {
+        setConversations(data.data.conversations);
+      }
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  };
+
+  const createNewConversation = async () => {
+    if (isCreatingConversation) return; // Prevent multiple simultaneous creations
+    
+    setIsCreatingConversation(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/conversations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: 'anonymous',
+          title: `New Chat ${new Date().toLocaleTimeString()}`
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        const newConversationId = data.data.conversation_id;
+        setCurrentConversationId(newConversationId);
+        
+        // Clear messages and let the useEffect handle the welcome message
+        setCurrentMessages([]);
+        
+        // Add the new conversation to the list without reloading
+        setConversations(prev => [{
+          id: newConversationId,
+          title: `New Chat ${new Date().toLocaleTimeString()}`,
+          updated_at: new Date().toISOString(),
+          messages: []
+        }, ...prev]);
+        
+        toast({
+          title: "New conversation created",
+          description: "You can start chatting now!",
+        });
+      }
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      toast({
+        title: "Error creating conversation",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingConversation(false);
+    }
+  };
+
+  const selectConversation = async (conversationId: string) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/conversations/${conversationId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setCurrentConversationId(conversationId);
+        const messages = data.data.messages || [];
+        
+        if (messages.length === 0) {
+          // If no messages, let the useEffect handle the welcome message
+          setCurrentMessages([]);
+        } else {
+          const formattedMessages = messages.map((msg: any, index: number) => ({
+            id: `msg-${index}`,
+            content: msg.content,
+            sender: msg.type === 'user' ? 'user' : 'ai',
+            timestamp: new Date(msg.timestamp || Date.now()),
+          }));
+          setCurrentMessages(formattedMessages);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+      toast({
+        title: "Error loading conversation",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteConversation = async (conversationId: string) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/conversations/${conversationId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Remove from local state
+        setConversations(prev => prev.filter(c => c.id !== conversationId));
+        
+        // If this was the current conversation, clear it
+        if (currentConversationId === conversationId) {
+          setCurrentConversationId(null);
+          setCurrentMessages([]);
+        }
+        
+        toast({
+          title: "Conversation deleted",
+          description: "The conversation has been removed.",
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      toast({
+        title: "Error deleting conversation",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const addMessage = (message: Message) => {
+    setCurrentMessages(prev => {
+      // Check if message with same ID already exists to prevent duplicates
+      const messageExists = prev.some(msg => msg.id === message.id);
+      if (messageExists) {
+        return prev;
+      }
+      return [...prev, message];
+    });
+  };
+
+  // AI response function - now works with conversations
   const handleSendMessage = async (message: string): Promise<string> => {
+    let conversationId = currentConversationId;
+    
+    // Create a new conversation if none exists
+    if (!conversationId) {
+      if (isCreatingConversation) {
+        return "I'm sorry, I'm still creating a conversation. Please wait a moment.";
+      }
+      
+      try {
+        const response = await fetch('http://localhost:5000/api/conversations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: 'anonymous',
+            title: `New Chat ${new Date().toLocaleTimeString()}`
+          }),
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          conversationId = data.data.conversation_id;
+          setCurrentConversationId(conversationId);
+          
+          // Clear messages and let the useEffect handle the welcome message
+          setCurrentMessages([]);
+          
+          // Add the new conversation to the list without reloading
+          setConversations(prev => [{
+            id: conversationId,
+            title: `New Chat ${new Date().toLocaleTimeString()}`,
+            updated_at: new Date().toISOString(),
+            messages: []
+          }, ...prev]);
+        } else {
+          throw new Error('Failed to create conversation');
+        }
+      } catch (error) {
+        console.error('Error creating conversation:', error);
+        return "I'm sorry, I'm having trouble creating a new conversation. Please try again.";
+      }
+    }
+
     setIsLoading(true);
     
     try {
-      const response = await fetch('http://localhost:5000/api/chat/message', {
+      const response = await fetch(`http://localhost:5000/api/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           message: message,
-          userId: 'anonymous', // You can make this dynamic later
-          sessionId: `session_${Date.now()}` // You can manage sessions better later
+          userId: 'anonymous'
         }),
       });
 
@@ -32,6 +263,13 @@ export default function Chat() {
       const data = await response.json();
       
       if (data.success) {
+        // Update the conversation in the list without reloading
+        setConversations(prev => prev.map(conv => 
+          conv.id === conversationId 
+            ? { ...conv, updated_at: new Date().toISOString() }
+            : conv
+        ));
+        
         return data.data.message;
       } else {
         throw new Error(data.error || 'Failed to get response from AI');
@@ -46,100 +284,114 @@ export default function Chat() {
   };
 
   return (
-    <div className="min-h-screen pb-20 p-4 lg:pb-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen pb-32 p-4 lg:pb-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Centered Chat Heading */}
+        <div className="hidden lg:flex lg:items-center lg:justify-center lg:mb-6">
+          <h1 className="text-3xl font-bold text-center">Chat</h1>
+        </div>
+
         {/* Desktop Layout */}
-        <div className="hidden lg:grid lg:grid-cols-4 lg:gap-8 lg:items-start">
-          {/* Left Sidebar - Chat Info */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="flex items-center gap-3 mb-6">
+        <div className="hidden lg:grid lg:grid-cols-5 lg:gap-4 lg:items-start">
+          {/* Left Sidebar - Conversations */}
+          <div className="lg:col-span-1">
+            <div className="flex items-center gap-3 mb-4">
               <Link to="/home">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="w-4 h-4" />
                 </Button>
               </Link>
-              <h1 className="text-xl font-semibold">Chat</h1>
             </div>
-
-            <Card className="p-6 shadow-card">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-gradient-primary rounded-full">
-                  <Brain className="w-5 h-5 text-primary-foreground" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold">Solari</h2>
-                  <p className="text-sm text-muted-foreground">Here to listen and support</p>
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Your AI companion Solari is trained to provide emotional support and wellness guidance. 
-                Feel free to share anything that's on your mind.
-              </p>
-            </Card>
-
-            <Card className="p-6 shadow-card">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Heart className="w-4 h-4 text-red-500" />
-                Conversation Tips
-              </h3>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <p>• Be open and honest about your feelings</p>
-                <p>• Ask for specific advice when needed</p>
-                <p>• Share what's working or not working</p>
-                <p>• Remember this is a safe, judgment-free space</p>
-              </div>
-            </Card>
-
-            <Card className="p-6 shadow-card">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Shield className="w-4 h-4 text-blue-500" />
-                Privacy & Safety
-              </h3>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <p>• Your conversations are private</p>
-                <p>• For immediate help, contact a mental health professional</p>
-                <p>• This AI is not a replacement for professional therapy</p>
-              </div>
+            <Card className="shadow-card h-[calc(100vh-200px)]">
+              <ConversationSidebar
+                conversations={conversations}
+                currentConversationId={currentConversationId}
+                onSelectConversation={selectConversation}
+                onCreateNewConversation={createNewConversation}
+                onDeleteConversation={deleteConversation}
+                isLoading={isLoadingConversations}
+              />
             </Card>
           </div>
 
           {/* Main Chat Area */}
-          <div className="lg:col-span-3">
-            <Card className="shadow-card h-[calc(100vh-120px)]">
-              <ChatInterface onSendMessage={handleSendMessage} isLoading={isLoading} />
+          <div className="lg:col-span-4">
+            <Card className="shadow-card h-[calc(100vh-200px)]">
+              <ChatInterface 
+                onSendMessage={handleSendMessage} 
+                isLoading={isLoading}
+                messages={currentMessages}
+                onAddMessage={addMessage}
+              />
             </Card>
           </div>
         </div>
 
         {/* Mobile Layout */}
-        <div className="lg:hidden max-w-md mx-auto h-full">
-          <div className="flex items-center gap-3 mb-6">
-            <Link to="/home">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-            </Link>
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-gradient-primary rounded-full">
-                <Brain className="w-4 h-4 text-primary-foreground" />
+        <div className="lg:hidden">
+          {/* Centered Chat Heading for Mobile */}
+          <div className="flex items-center justify-center mb-6">
+            <h1 className="text-3xl font-bold text-center">Chat</h1>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {/* Mobile Chat Area */}
+            <Card className="shadow-card h-[calc(100vh-220px)]">
+              <ChatInterface 
+                onSendMessage={handleSendMessage} 
+                isLoading={isLoading}
+                messages={currentMessages}
+                onAddMessage={addMessage}
+              />
+            </Card>
+          </div>
+
+          {/* Mobile Back Arrow - Fixed to top left */}
+          <Link to="/home">
+            <Button 
+              variant="ghost" 
+              size="sm"
+              className="fixed top-4 left-4 z-50 lg:hidden"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+          </Link>
+
+          {/* Mobile Sidebar - Fixed to right side */}
+          {showSidebar && (
+            <div className="fixed top-0 right-0 h-full w-80 bg-card border-l border-border z-50">
+              <div className="p-4 border-b border-border">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Recent Chats</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowSidebar(false)}
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-              <div>
-                <h1 className="text-lg font-semibold">Solari</h1>
-                <p className="text-xs text-muted-foreground">Here to listen and support</p>
-              </div>
+              <ConversationSidebar
+                conversations={conversations}
+                currentConversationId={currentConversationId}
+                onSelectConversation={selectConversation}
+                onCreateNewConversation={createNewConversation}
+                onDeleteConversation={deleteConversation}
+                isLoading={isLoadingConversations}
+              />
             </div>
-          </div>
+          )}
 
-          <Card className="shadow-card h-[calc(100vh-200px)]">
-            <ChatInterface onSendMessage={handleSendMessage} isLoading={isLoading} />
-          </Card>
-
-          <div className="mt-4 p-3 bg-primary/5 rounded-lg border border-primary/20">
-            <p className="text-xs text-muted-foreground text-center">
-              💙 This AI provides emotional support and wellness guidance. 
-              For immediate help, contact a mental health professional.
-            </p>
-          </div>
+          {/* Mobile Menu Button - Fixed to top right */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSidebar(!showSidebar)}
+            className="fixed top-4 right-4 z-50 lg:hidden"
+          >
+            <Menu className="w-4 h-4" />
+          </Button>
         </div>
       </div>
     </div>

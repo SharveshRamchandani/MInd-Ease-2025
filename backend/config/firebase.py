@@ -48,6 +48,7 @@ def get_firestore_client():
 COLLECTIONS = {
     'users': 'users',
     'chat_sessions': 'chat_sessions',
+    'conversations': 'conversations',
     'mood_logs': 'mood_logs',
     'wellness_activities': 'wellness_activities',
     'coping_strategies': 'coping_strategies',
