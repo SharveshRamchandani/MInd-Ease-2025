@@ -40,6 +40,8 @@ export const ConversationSidebar = ({
   onDeleteConversation,
   isLoading = false
 }: ConversationSidebarProps) => {
+  console.log('ConversationSidebar - conversations:', conversations);
+  console.log('ConversationSidebar - currentConversationId:', currentConversationId);
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();

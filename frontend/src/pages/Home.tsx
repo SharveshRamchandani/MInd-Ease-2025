@@ -44,7 +44,7 @@ export default function Home(): React.JSX.Element {
                   <div className="space-y-4">
                     <p className="text-lg text-muted-foreground">How are you feeling today?</p>
                     <Link to="/mood">
-                      <Button className="bg-gradient-primary hover:opacity-90 transition-gentle w-full lg:w-auto lg:px-8 lg:py-3 lg:text-lg">
+                      <Button className="bg-gradient-primary hover:opacity-90 transition-gentle w-full lg:w-auto lg:px-8 lg:py-3 lg:text-lg mt-2">
                         <Plus className="w-4 h-4 lg:w-5 lg:h-5 mr-2" />
                         Log Your Mood
                       </Button>
@@ -55,7 +55,7 @@ export default function Home(): React.JSX.Element {
                     <div className="text-4xl lg:text-5xl">{todaysMood}</div>
                     <p className="text-base text-muted-foreground">Mood logged for today</p>
                     <Link to="/mood">
-                      <Button variant="outline" size="lg">Update Mood</Button>
+                      <Button variant="outline" size="lg" className="animate-reduced-bounce">Update Mood</Button>
                     </Link>
                   </div>
                 )}
@@ -65,17 +65,17 @@ export default function Home(): React.JSX.Element {
             {/* Quick Actions */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
               <Link to="/chat">
-                <Card className="p-6 lg:p-8 shadow-card hover:shadow-glow transition-gentle">
+                <Card className="p-6 lg:p-8 shadow-card hover:shadow-glow transition-gentle animate-reduced-bounce">
                   <div className="text-center space-y-3">
                     <MessageCircle className="w-8 h-8 lg:w-10 lg:h-10 mx-auto text-primary" />
-                    <p className="text-lg font-medium">Chat with AI</p>
+                    <p className="text-lg font-medium">Chat with Solari</p>
                     <p className="text-sm text-muted-foreground">Get personalized support and guidance</p>
                   </div>
                 </Card>
               </Link>
               
               <Link to="/history">
-                <Card className="p-6 lg:p-8 shadow-card hover:shadow-glow transition-gentle">
+                <Card className="p-6 lg:p-8 shadow-card hover:shadow-glow transition-gentle animate-reduced-bounce">
                   <div className="text-center space-y-3">
                     <BarChart3 className="w-8 h-8 lg:w-10 lg:h-10 mx-auto text-primary" />
                     <p className="text-lg font-medium">View Progress</p>
@@ -104,7 +104,7 @@ export default function Home(): React.JSX.Element {
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl lg:text-2xl font-semibold">Recent Moods</h3>
                   <Link to="/history">
-                    <Button variant="ghost" size="sm" className="text-primary">
+                    <Button variant="ghost" size="sm" className="text-primary animate-reduced-bounce">
                       View All
                     </Button>
                   </Link>
@@ -112,7 +112,7 @@ export default function Home(): React.JSX.Element {
                 <div className="grid grid-cols-3 gap-3">
                   {recentMoods.map((mood, index) => (
                     <Link key={index} to="/mood">
-                      <div className="text-3xl lg:text-4xl animate-gentle-bounce text-center hover:scale-110 transition-transform cursor-pointer p-2 rounded-lg hover:bg-muted/50">
+                      <div className="text-3xl lg:text-4xl animate-reduced-bounce text-center hover:scale-110 transition-transform cursor-pointer p-2 rounded-lg hover:bg-muted/50">
                         {mood}
                       </div>
                     </Link>
@@ -153,7 +153,7 @@ export default function Home(): React.JSX.Element {
                 <div className="space-y-3">
                   <p className="text-muted-foreground">How are you feeling today?</p>
                   <Link to="/mood">
-                    <Button className="bg-gradient-primary hover:opacity-90 transition-gentle w-full">
+                    <Button className="bg-gradient-primary hover:opacity-90 transition-gentle w-full mt-2">
                       <Plus className="w-4 h-4 mr-2" />
                       Log Your Mood
                     </Button>
@@ -163,9 +163,9 @@ export default function Home(): React.JSX.Element {
                 <div className="space-y-3">
                   <div className="text-3xl">{todaysMood}</div>
                   <p className="text-sm text-muted-foreground">Mood logged for today</p>
-                  <Link to="/mood">
-                    <Button variant="outline" size="sm">Update Mood</Button>
-                  </Link>
+                                      <Link to="/mood">
+                      <Button variant="outline" size="sm" className="animate-reduced-bounce">Update Mood</Button>
+                    </Link>
                 </div>
               )}
             </div>
@@ -190,7 +190,7 @@ export default function Home(): React.JSX.Element {
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">Recent Moods</h3>
               <Link to="/history">
-                <Button variant="ghost" size="sm" className="text-primary">
+                <Button variant="ghost" size="sm" className="text-primary animate-reduced-bounce">
                   View All
                 </Button>
               </Link>
@@ -198,7 +198,7 @@ export default function Home(): React.JSX.Element {
             <div className="grid grid-cols-3 gap-2">
               {recentMoods.map((mood, index) => (
                 <Link key={index} to="/mood">
-                  <div className="text-2xl animate-gentle-bounce text-center hover:scale-110 transition-transform cursor-pointer p-2 rounded-lg hover:bg-muted/50">
+                  <div className="text-2xl animate-reduced-bounce text-center hover:scale-110 transition-transform cursor-pointer p-2 rounded-lg hover:bg-muted/50">
                     {mood}
                   </div>
                 </Link>
@@ -212,16 +212,16 @@ export default function Home(): React.JSX.Element {
           {/* Quick Actions */}
           <div className="grid grid-cols-2 gap-4">
             <Link to="/chat">
-              <Card className="p-4 shadow-card hover:shadow-glow transition-gentle">
+              <Card className="p-4 shadow-card hover:shadow-glow transition-gentle animate-reduced-bounce">
                 <div className="text-center space-y-2">
                   <MessageCircle className="w-6 h-6 mx-auto text-primary" />
-                  <p className="text-sm font-medium">Chat with AI</p>
+                  <p className="text-sm font-medium">Chat with Solari</p>
                 </div>
               </Card>
             </Link>
             
             <Link to="/history">
-              <Card className="p-4 shadow-card hover:shadow-glow transition-gentle">
+              <Card className="p-4 shadow-card hover:shadow-glow transition-gentle animate-reduced-bounce">
                 <div className="text-center space-y-2">
                   <BarChart3 className="w-6 h-6 mx-auto text-primary" />
                   <p className="text-sm font-medium">View Progress</p>

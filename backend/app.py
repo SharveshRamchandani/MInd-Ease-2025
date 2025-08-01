@@ -553,7 +553,10 @@ def get_conversations():
         user_id = request.args.get('userId', 'anonymous')
         limit = int(request.args.get('limit', 20))
         
+        logger.info(f"Getting conversations for user: {user_id}, limit: {limit}")
+        
         if not FIREBASE_AVAILABLE:
+            logger.error("Firebase not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -562,6 +565,8 @@ def get_conversations():
         
         # Get conversations from Firebase
         conversations = db_manager.get_conversations(user_id, limit)
+        
+        logger.info(f"Found {len(conversations)} conversations for user {user_id}")
         
         return jsonify({
             'success': True,
@@ -596,7 +601,10 @@ def create_conversation():
         user_id = data.get('userId', 'anonymous')
         title = data.get('title')
         
+        logger.info(f"Creating conversation for user: {user_id} with title: {title}")
+        
         if not FIREBASE_AVAILABLE:
+            logger.error("Firebase not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -605,6 +613,8 @@ def create_conversation():
         
         # Create conversation in Firebase
         conversation_id = db_manager.create_conversation(user_id, title)
+        
+        logger.info(f"Conversation created with ID: {conversation_id}")
         
         return jsonify({
             'success': True,
@@ -627,7 +637,10 @@ def create_conversation():
 def get_conversation(conversation_id):
     """Get a specific conversation"""
     try:
+        logger.info(f"Getting conversation: {conversation_id}")
+        
         if not FIREBASE_AVAILABLE:
+            logger.error("Firebase not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -638,11 +651,13 @@ def get_conversation(conversation_id):
         conversation = db_manager.get_conversation(conversation_id)
         
         if not conversation:
+            logger.warning(f"Conversation {conversation_id} not found")
             return jsonify({
                 'success': False,
                 'error': 'Conversation not found'
             }), 404
         
+        logger.info(f"Returning conversation {conversation_id} with {len(conversation.get('messages', []))} messages")
         return jsonify({
             'success': True,
             'data': conversation
@@ -713,7 +728,10 @@ def add_message_to_conversation(conversation_id):
         
         user_id = data.get('userId', 'anonymous')
         
+        logger.info(f"Adding message to conversation {conversation_id} for user {user_id}")
+        
         if not FIREBASE_AVAILABLE:
+            logger.error("Firebase not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -724,6 +742,7 @@ def add_message_to_conversation(conversation_id):
         response = generate_response(message)
         
         if not response['success']:
+            logger.error(f"Failed to generate AI response: {response['error']}")
             return jsonify({
                 'success': False,
                 'error': 'Failed to generate response',
@@ -743,6 +762,8 @@ def add_message_to_conversation(conversation_id):
             'content': response['message']
         }
         db_manager.update_conversation(conversation_id, ai_message_data)
+        
+        logger.info(f"Successfully added message to conversation {conversation_id}")
         
         return jsonify({
             'success': True,

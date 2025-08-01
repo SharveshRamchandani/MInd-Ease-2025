@@ -86,7 +86,7 @@ export const ChatInterface = ({ onSendMessage, isLoading = false, initialMessage
           <div
             key={message.id}
             className={cn(
-              "flex gap-3 animate-gentle-bounce",
+              "flex gap-3",
               message.sender === "user" ? "justify-end" : "justify-start"
             )}
           >

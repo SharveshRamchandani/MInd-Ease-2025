@@ -59,6 +59,7 @@ class DatabaseManager:
                 'updated_at': datetime.now()
             }
             
+            logger.info(f"Creating conversation for user: {user_id} with title: {conversation_data['title']}")
             doc_ref = self.db.collection(self.collections['conversations']).add(conversation_data)
             logger.info(f"Conversation created with ID: {doc_ref[1].id}")
             return doc_ref[1].id
@@ -69,15 +70,20 @@ class DatabaseManager:
     def update_conversation(self, conversation_id: str, message_data: Dict[str, Any]) -> bool:
         """Add a message to an existing conversation"""
         try:
+            logger.info(f"Updating conversation {conversation_id} with message type: {message_data.get('type')}")
+            
             # Get the current conversation
             conversation_ref = self.db.collection(self.collections['conversations']).document(conversation_id)
             conversation_doc = conversation_ref.get()
             
             if not conversation_doc.exists:
+                logger.error(f"Conversation {conversation_id} not found")
                 raise Exception("Conversation not found")
             
             conversation_data = conversation_doc.to_dict()
             messages = conversation_data.get('messages', [])
+            
+            logger.info(f"Current messages in conversation: {len(messages)}")
             
             # Add the new message
             message_data['timestamp'] = datetime.now()
@@ -89,7 +95,7 @@ class DatabaseManager:
                 'updated_at': datetime.now()
             })
             
-            logger.info(f"Conversation {conversation_id} updated with new message")
+            logger.info(f"Conversation {conversation_id} updated with new message. Total messages: {len(messages)}")
             return True
         except Exception as e:
             logger.error(f"Failed to update conversation: {str(e)}")
@@ -98,6 +104,7 @@ class DatabaseManager:
     def get_conversations(self, user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Get all conversations for a user"""
         try:
+            logger.info(f"Getting conversations for user: {user_id}")
             query = self.db.collection(self.collections['conversations'])\
                 .where('user_id', '==', user_id)\
                 .limit(limit)
@@ -109,10 +116,12 @@ class DatabaseManager:
                 conversation_data = doc.to_dict()
                 conversation_data['id'] = doc.id
                 conversations.append(conversation_data)
+                logger.info(f"Found conversation: {doc.id} - {conversation_data.get('title', 'No title')}")
             
             # Sort by updated_at in descending order (most recent first)
             conversations.sort(key=lambda x: x.get('updated_at', datetime.min), reverse=True)
             
+            logger.info(f"Returning {len(conversations)} conversations for user {user_id}")
             return conversations
         except Exception as e:
             logger.error(f"Failed to get conversations for user {user_id}: {str(e)}")
@@ -121,11 +130,15 @@ class DatabaseManager:
     def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
         """Get a specific conversation by ID"""
         try:
+            logger.info(f"Getting conversation: {conversation_id}")
             doc = self.db.collection(self.collections['conversations']).document(conversation_id).get()
             if doc.exists:
                 conversation_data = doc.to_dict()
                 conversation_data['id'] = doc.id
+                logger.info(f"Found conversation: {conversation_id} with {len(conversation_data.get('messages', []))} messages")
                 return conversation_data
+            else:
+                logger.warning(f"Conversation {conversation_id} not found")
             return None
         except Exception as e:
             logger.error(f"Failed to get conversation {conversation_id}: {str(e)}")
