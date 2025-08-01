@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MotivationalQuote } from "@/components/wellness/motivational-quote";
 import { CopingStrategies } from "@/components/wellness/coping-strategies";
-import { MessageCircle, BarChart3, Plus } from "lucide-react";
+import { MessageCircle, BarChart3, Plus, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import heroImage from "@/assets/hero-wellness.jpg";
 
@@ -15,6 +15,15 @@ interface MoodOption {
   color: string;
 }
 
+interface MoodEntry {
+  id: string;
+  date: string;
+  mood: string;
+  emoji: string;
+  journal?: string;
+  timestamp: Date;
+}
+
 const moodOptions: MoodOption[] = [
   { emoji: "😄", label: "Joyful", value: "joy", color: "emotion-joy" },
   { emoji: "😊", label: "Content", value: "calm", color: "emotion-calm" },
@@ -23,6 +32,100 @@ const moodOptions: MoodOption[] = [
   { emoji: "😡", label: "Angry", value: "angry", color: "emotion-angry" },
   { emoji: "😰", label: "Anxious", value: "anxious", color: "emotion-anxious" },
 ];
+
+// Mock data - replace with Firebase data
+const mockMoodHistory: MoodEntry[] = [
+  {
+    id: "1",
+    date: "Today",
+    mood: "calm",
+    emoji: "😊",
+    journal: "Had a peaceful morning meditation and felt centered throughout the day.",
+    timestamp: new Date(),
+  },
+  {
+    id: "2",
+    date: "Yesterday",
+    mood: "joy",
+    emoji: "😄",
+    journal: "Great day with friends! Feeling grateful and happy.",
+    timestamp: new Date(Date.now() - 86400000),
+  },
+  {
+    id: "3",
+    date: "2 days ago",
+    mood: "anxious",
+    emoji: "😰",
+    journal: "Work stress was high today. Used breathing exercises which helped.",
+    timestamp: new Date(Date.now() - 172800000),
+  },
+  {
+    id: "4",
+    date: "3 days ago",
+    mood: "neutral",
+    emoji: "😐",
+    journal: "Regular day, nothing special happened.",
+    timestamp: new Date(Date.now() - 259200000),
+  },
+  {
+    id: "5",
+    date: "4 days ago",
+    mood: "sad",
+    emoji: "😔",
+    journal: "Feeling a bit down today. Talked to a friend which helped.",
+    timestamp: new Date(Date.now() - 345600000),
+  },
+];
+
+const MoodChart = () => {
+  const moodScores = {
+    joy: 5,
+    calm: 4,
+    neutral: 3,
+    anxious: 2,
+    sad: 2,
+    angry: 1,
+  };
+
+  const chartData = mockMoodHistory.slice(0, 7).reverse();
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xl lg:text-2xl font-semibold flex items-center gap-3">
+          <TrendingUp className="w-5 h-5" />
+         Your Mood Recently.
+        </h3>
+        <Link to="/history">
+          <Button variant="ghost" size="sm" className="text-primary">
+            View All
+          </Button>
+        </Link>
+      </div>
+      <div className="space-y-5">
+        {chartData.map((entry, index) => {
+          const score = moodScores[entry.mood as keyof typeof moodScores];
+          const width = (score / 5) * 100;
+          
+          return (
+            <div key={entry.id} className="flex items-center gap-6">
+              <div className="w-24 text-sm text-muted-foreground">{entry.date}</div>
+              <div className="flex-1 bg-muted rounded-full h-10 flex items-center">
+                <div 
+                  className="h-full bg-gradient-primary rounded-full flex items-center justify-end pr-4 transition-gentle"
+                  style={{ width: `${width}%` }}
+                >
+                  <span className="text-base">{entry.emoji}</span>
+                </div>
+              </div>
+              <div className="w-20 text-sm font-medium capitalize">{entry.mood}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 export default function Home(): React.JSX.Element {
   const [todaysMood, setTodaysMood] = useState<string | null>(null);
@@ -128,6 +231,16 @@ export default function Home(): React.JSX.Element {
 
           {/* Right Column - Stats and Recent */}
           <div className="lg:col-span-4 space-y-6">
+            {/* Motivational Quote */}
+            <div className="lg:block">
+              <MotivationalQuote />
+            </div>
+
+            {/* 7-Day Mood Trend */}
+            <Card className="p-6 lg:p-8 shadow-card h-[400px] flex flex-col justify-center">
+              <MoodChart />
+            </Card>
+
             {/* Streak Counter */}
             <Card className="p-6 lg:p-8 shadow-card bg-gradient-calm">
               <div className="text-center space-y-4">
@@ -137,34 +250,6 @@ export default function Home(): React.JSX.Element {
                 <p className="text-secondary-foreground/70">days</p>
               </div>
             </Card>
-
-            {/* Recent Moods */}
-            <Card className="p-6 lg:p-8 shadow-card">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xl lg:text-2xl font-semibold">Recent Moods</h3>
-                  <Link to="/history">
-                    <Button variant="ghost" size="sm" className="text-primary">
-                      View All
-                    </Button>
-                  </Link>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  {recentMoods.map((mood, index) => (
-                    <Link key={index} to="/mood">
-                      <div className="text-3xl lg:text-4xl animate-gentle-bounce text-center hover:scale-110 transition-transform cursor-pointer p-2 rounded-lg hover:bg-muted/50">
-                        {mood}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </Card>
-
-            {/* Motivational Quote */}
-            <div className="lg:block">
-              <MotivationalQuote />
-            </div>
           </div>
         </div>
 
@@ -228,6 +313,14 @@ export default function Home(): React.JSX.Element {
             </div>
           </Card>
 
+          {/* Motivational Quote */}
+          <MotivationalQuote />
+
+          {/* 7-Day Mood Trend */}
+          <Card className="p-6 shadow-card">
+            <MoodChart />
+          </Card>
+
           {/* Streak Counter */}
           <Card className="p-4 shadow-card bg-gradient-calm">
             <div className="flex items-center justify-between">
@@ -241,30 +334,6 @@ export default function Home(): React.JSX.Element {
               </div>
             </div>
           </Card>
-
-          {/* Recent Moods */}
-          <Card className="p-6 shadow-card">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Recent Moods</h3>
-              <Link to="/history">
-                <Button variant="ghost" size="sm" className="text-primary">
-                  View All
-                </Button>
-              </Link>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {recentMoods.map((mood, index) => (
-                <Link key={index} to="/mood">
-                  <div className="text-2xl animate-gentle-bounce text-center hover:scale-110 transition-transform cursor-pointer p-2 rounded-lg hover:bg-muted/50">
-                    {mood}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </Card>
-
-          {/* Motivational Quote */}
-          <MotivationalQuote />
 
           {/* Quick Actions */}
           <div className="grid grid-cols-2 gap-4">
