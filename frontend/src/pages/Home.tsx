@@ -156,7 +156,7 @@ export default function Home(): React.JSX.Element {
           {/* Hero Section */}
           <div className="relative overflow-hidden rounded-2xl shadow-glow">
             <img 
-              src={"./assets/hero-wellness.jpg"} 
+              src={heroImage} 
               alt="Peaceful wellness imagery" 
               className="w-full h-48 object-cover"
             />

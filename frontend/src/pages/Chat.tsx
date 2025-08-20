@@ -38,7 +38,7 @@ export default function Chat() {
         <div className="hidden lg:grid lg:grid-cols-5 lg:gap-4 lg:items-start">
           {/* Left Sidebar - Conversations */}
           <div className="lg:col-span-1">
-            <div className="flex items-center gap-3 mb-4">
+            <div className="absolute top-4 left-21 z-5">
               <Link to="/home">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="w-4 h-4" />
