@@ -6,4 +6,5 @@ Flask-Limiter==3.5.0
 gunicorn==21.2.0
 requests==2.31.0
 python-json-logger==2.0.7
-firebase-admin==6.4.0 
+firebase-admin==6.4.0
+google-cloud-texttospeech==2.16.3 

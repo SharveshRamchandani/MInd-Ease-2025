@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { stripMarkdown } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 interface Message {
@@ -59,7 +60,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     if (currentMessages.length === 0 && !currentConversationId) {
       setCurrentMessages([{
         id: `welcome-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        content: "Hello! I'm Solari, your AI wellness companion. I'm here to support your mental wellness journey. How are you feeling today? Feel free to share anything that's on your mind.",
+        content: "Hello! I'm Solari, your quiet companion. I'm here to support your mental wellness. I can help in a number of ways:\n\nEmotional Support: I can listen to you without judgment and validate your feelings.\n\nStress & Anxiety Management: I can guide you through breathing exercises, mindfulness techniques, and even help you create a personalized stress-relief plan.\n\nGeneral Well-Being: I can offer advice on things like hydration, nutrition, sleep, and exercise.\n\nRelationship & Social Advice: I can provide guidance on friendships, romantic relationships, and building self-worth.\n\nA little bit of Fun: I can share jokes and quotes to lighten the mood!\n\nBasically, I'm here to listen, offer helpful tips, and be a supportive presence for you. How are you feeling today? Is there anything specific on your mind?",
         sender: "ai",
         timestamp: new Date(),
       }]);
@@ -74,27 +75,29 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     initializeChat();
   }, []);
 
-  // Create default conversation if none exists after loading
-  useEffect(() => {
-    if (!isLoadingConversations && conversations.length === 0 && !isCreatingConversation) {
-      createNewConversation();
-    }
-  }, [isLoadingConversations, conversations.length, isCreatingConversation]);
+  
 
   const loadConversations = async () => {
     if (isLoadingConversations) return; // Prevent multiple simultaneous loads
     
     setIsLoadingConversations(true);
     try {
-      console.log('Loading conversations...');
-      const response = await fetch('http://localhost:5000/api/conversations?userId=anonymous');
-      const data = await response.json();
-      
-      console.log('Conversations response:', data);
+      const { http, apiBase } = await import('@/lib/api');
+      const data = await http<any>(`/api/conversations?userId=anonymous`);
       
       if (data.success) {
-        setConversations(data.data.conversations);
-        console.log('Conversations loaded:', data.data.conversations);
+        const loaded = data.data.conversations as Conversation[];
+        setConversations(loaded);
+        
+        // Try to restore the last selected conversation
+        const lastId = localStorage.getItem('chat:lastConversationId');
+        if (lastId && loaded.some(c => c.id === lastId)) {
+          await selectConversation(lastId);
+        } else if (loaded.length > 0) {
+          // If none saved, do not auto-create; just show list and keep welcome message
+          setCurrentConversationId(null);
+          setCurrentMessages(prev => prev.length ? prev : []);
+        }
       } else {
         console.error('Failed to load conversations:', data.error);
       }
@@ -110,22 +113,19 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     
     setIsCreatingConversation(true);
     try {
-      const response = await fetch('http://localhost:5000/api/conversations', {
+      const { http } = await import('@/lib/api');
+      const data = await http<any>(`/api/conversations`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+        body: {
           userId: 'anonymous',
           title: `New Chat ${new Date().toLocaleTimeString()}`
-        }),
+        }
       });
-
-      const data = await response.json();
       
       if (data.success) {
         const newConversationId = data.data.conversation_id;
         setCurrentConversationId(newConversationId);
+        localStorage.setItem('chat:lastConversationId', newConversationId);
         
         // Clear messages and let the useEffect handle the welcome message
         setCurrentMessages([]);
@@ -158,16 +158,15 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const selectConversation = async (conversationId: string) => {
     try {
       console.log('Selecting conversation:', conversationId);
-      const response = await fetch(`http://localhost:5000/api/conversations/${conversationId}`);
-      const data = await response.json();
+      const { http } = await import('@/lib/api');
+      const data = await http<any>(`/api/conversations/${conversationId}`);
       
       console.log('Conversation data:', data);
       
       if (data.success) {
         setCurrentConversationId(conversationId);
+        localStorage.setItem('chat:lastConversationId', conversationId);
         const messages = data.data.messages || [];
-        
-        console.log('Messages in conversation:', messages);
         
         if (messages.length === 0) {
           // If no messages, let the useEffect handle the welcome message
@@ -175,12 +174,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         } else {
           const formattedMessages = messages.map((msg: any, index: number) => ({
             id: `msg-${index}`,
-            content: msg.content,
+            content: stripMarkdown(String(msg.content || "")),
             sender: msg.type === 'user' ? 'user' : 'ai',
             timestamp: new Date(msg.timestamp || Date.now()),
           }));
           setCurrentMessages(formattedMessages);
-          console.log('Formatted messages:', formattedMessages);
         }
       } else {
         console.error('Failed to load conversation:', data.error);
@@ -202,11 +200,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   const deleteConversation = async (conversationId: string) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/conversations/${conversationId}`, {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
+      const { http } = await import('@/lib/api');
+      const data = await http<any>(`/api/conversations/${conversationId}`, { method: 'DELETE' });
       
       if (data.success) {
         // Remove from local state
@@ -215,6 +210,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         // If this was the current conversation, clear it
         if (currentConversationId === conversationId) {
           setCurrentConversationId(null);
+          localStorage.removeItem('chat:lastConversationId');
           setCurrentMessages([]);
         }
         
@@ -250,10 +246,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     
     // Create a new conversation if none exists
     if (!conversationId) {
-      if (isCreatingConversation) {
-        return "I'm sorry, I'm still creating a conversation. Please wait a moment.";
-      }
-      
+      // Do not auto-create on reload; only create when user starts messaging on chat page
       try {
         const response = await fetch('http://localhost:5000/api/conversations', {
           method: 'POST',
@@ -271,6 +264,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         if (data.success) {
           conversationId = data.data.conversation_id;
           setCurrentConversationId(conversationId);
+          localStorage.setItem('chat:lastConversationId', conversationId);
           
           // Clear messages and let the useEffect handle the welcome message
           setCurrentMessages([]);
@@ -294,22 +288,14 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     setIsLoading(true);
     
     try {
-      const response = await fetch(`http://localhost:5000/api/conversations/${conversationId}/messages`, {
+      const { http } = await import('@/lib/api');
+      const data = await http<any>(`/api/conversations/${conversationId}/messages`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: message,
+        body: {
+          message,
           userId: 'anonymous'
-        }),
+        },
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
       
       if (data.success) {
         // Update the conversation in the list without reloading
@@ -319,7 +305,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
             : conv
         ));
         
-        return data.data.message;
+        return stripMarkdown(String(data.data.message || ""));
       } else {
         throw new Error(data.error || 'Failed to get response from AI');
       }

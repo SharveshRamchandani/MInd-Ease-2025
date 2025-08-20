@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Send, Bot, User } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Send, Bot, User, Mic, MicOff, Volume2 } from "lucide-react";
+import { cn, stripMarkdown } from "@/lib/utils";
+import { useVoice } from "@/hooks/use-voice";
 
 interface Message {
   id: string;
@@ -23,7 +24,20 @@ interface ChatInterfaceProps {
 export const ChatInterface = ({ onSendMessage, isLoading = false, initialMessages = [], messages, onAddMessage }: ChatInterfaceProps) => {
   const [inputMessage, setInputMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  const {
+    isListening,
+    isSpeaking,
+    transcript,
+    startListening,
+    stopListening,
+    speak,
+    stopSpeaking,
+    resetTranscript,
+    isSupported: voiceSupported,
+  } = useVoice();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -33,32 +47,44 @@ export const ChatInterface = ({ onSendMessage, isLoading = false, initialMessage
     scrollToBottom();
   }, [messages, isTyping]);
 
+  // Update input message when transcript changes during listening
+  useEffect(() => {
+    if (isListening && transcript) {
+      setInputMessage(transcript);
+    }
+  }, [transcript, isListening]);
+
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return;
+    const messageToSend = inputMessage.trim();
+    if (!messageToSend || isLoading) return;
 
     const userMessage: Message = {
       id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      content: inputMessage,
+      content: messageToSend,
       sender: "user",
       timestamp: new Date(),
     };
 
     onAddMessage(userMessage);
     setInputMessage("");
+    resetTranscript();
+    stopListening();
     setIsTyping(true);
 
     try {
-      const aiResponse = await onSendMessage(inputMessage);
+      const aiResponse = await onSendMessage(messageToSend);
       
       setTimeout(() => {
         const aiMessage: Message = {
           id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          content: aiResponse,
+          content: stripMarkdown(aiResponse),
           sender: "ai",
           timestamp: new Date(),
         };
         onAddMessage(aiMessage);
         setIsTyping(false);
+        
+        // Remove auto-speak - only speak when speaker button is clicked
       }, 1000); // Simulate typing delay
     } catch (error) {
       setIsTyping(false);
@@ -79,6 +105,30 @@ export const ChatInterface = ({ onSendMessage, isLoading = false, initialMessage
     }
   };
 
+  const handleVoiceToggle = () => {
+    if (isListening) {
+      stopListening();
+      // When stopping, set the transcript as the input message
+      if (transcript.trim()) {
+        setInputMessage(transcript.trim());
+      }
+    } else {
+      startListening();
+    }
+  };
+
+
+
+  const handleReadMessage = (messageContent: string, messageId: string) => {
+    if (isSpeaking) {
+      stopSpeaking();
+      return;
+    }
+
+    // Speak just this specific message with AI voice
+    speak(messageContent, undefined, true);
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto space-y-3 p-3">
@@ -96,22 +146,41 @@ export const ChatInterface = ({ onSendMessage, isLoading = false, initialMessage
               </div>
             )}
             
-            <Card className={cn(
-              "max-w-[70%] p-2.5 shadow-card",
-              message.sender === "user" 
-                ? "bg-primary text-primary-foreground" 
-                : "bg-card"
-            )}>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                {message.content}
-              </p>
-              <div className="mt-2 text-xs opacity-70">
-                {message.timestamp.toLocaleTimeString([], { 
-                  hour: '2-digit', 
-                  minute: '2-digit' 
-                })}
-              </div>
-            </Card>
+            <div className="flex flex-col gap-1">
+              <Card className={cn(
+                "max-w-[75%] w-auto inline-flex items-baseline gap-1 px-2.5 py-1 shadow-card",
+                message.sender === "user" 
+                  ? "bg-primary text-primary-foreground" 
+                  : "bg-card"
+              )}>
+                <p className="text-[15px] leading-5 whitespace-pre-wrap break-words m-0 max-w-full">
+                  {message.content}
+                </p>
+                <span className="text-[10px] opacity-70 whitespace-nowrap leading-4">
+                  {message.timestamp.toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </span>
+              </Card>
+              
+              {/* Speaker button for AI messages only */}
+              {message.sender === "ai" && voiceSupported && (
+                <div className="flex justify-start">
+                  <Button
+                    onClick={() => handleReadMessage(message.content, message.id)}
+                    disabled={isLoading}
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs hover:bg-muted/50 transition-all duration-200"
+                    title="Read this message"
+                  >
+                    <Volume2 className="w-3 h-3 mr-1" />
+                    Read
+                  </Button>
+                </div>
+              )}
+            </div>
 
             {message.sender === "user" && (
               <div className="flex-shrink-0 w-8 h-8 bg-accent rounded-full flex items-center justify-center">
@@ -141,13 +210,33 @@ export const ChatInterface = ({ onSendMessage, isLoading = false, initialMessage
       <div className="border-t border-border p-3">
         <div className="flex gap-2">
           <Textarea
-            value={inputMessage}
+            value={isListening ? transcript : inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Share what's on your mind..."
+            placeholder={isListening ? "Listening..." : "Share what's on your mind..."}
             className="resize-none min-h-[40px] max-h-[80px]"
             disabled={isLoading}
           />
+          
+          {/* Voice input button */}
+          {voiceSupported && (
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleVoiceToggle}
+                disabled={isLoading}
+                variant={isListening ? "destructive" : "outline"}
+                size="sm"
+                className={cn(
+                  "transition-all duration-200",
+                  isListening && "animate-pulse"
+                )}
+              >
+                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </Button>
+            </div>
+          )}
+          
+
           <Button
             onClick={handleSendMessage}
             disabled={!inputMessage.trim() || isLoading}
@@ -157,6 +246,24 @@ export const ChatInterface = ({ onSendMessage, isLoading = false, initialMessage
             <Send className="w-4 h-4" />
           </Button>
         </div>
+        
+        {/* Voice status indicator */}
+        {voiceSupported && (isListening || isSpeaking) && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            {isListening && (
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                <span>Listening...</span>
+              </div>
+            )}
+            {isSpeaking && (
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                <span>Speaking...</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

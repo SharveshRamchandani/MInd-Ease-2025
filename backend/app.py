@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -16,9 +16,13 @@ logger = logging.getLogger(__name__)
 # Import Firebase database
 try:
     from config.database import db_manager
-    FIREBASE_AVAILABLE = True
-    logger.info("Firebase database connected successfully")
-except ImportError as e:
+    # Firestore can still be None if initialization failed; detect that
+    FIREBASE_AVAILABLE = getattr(db_manager, 'db', None) is not None
+    if FIREBASE_AVAILABLE:
+        logger.info("Firebase database connected successfully")
+    else:
+        logger.warning("Firebase imported, but Firestore client is None – running without database")
+except Exception as e:
     FIREBASE_AVAILABLE = False
     logger.warning(f"Firebase not available - running without database: {str(e)}")
 
@@ -46,6 +50,14 @@ limiter = Limiter(
 
 # Configure Gemini AI
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+
+# Optional: Google Cloud TTS client
+try:
+    from google.cloud import texttospeech
+    GOOGLE_TTS_AVAILABLE = True
+except Exception as e:
+    GOOGLE_TTS_AVAILABLE = False
+    logger.warning(f"Google Cloud TTS not available: {e}")
 
 # Mental wellness system prompt
 MENTAL_WELLNESS_SYSTEM_PROMPT = """You are Solari,a mental wellness chatbot designed to provide users with emotional support, stress management strategies, and general well-being advice. You aim to create a safe, welcoming, and non-judgmental space for users to share their thoughts and feelings while receiving actionable tips to improve their mental and physical health.
@@ -81,7 +93,7 @@ Your motto is **"Your Quiet Companion."**
 ---
 
 ### **🔹 Enhanced Sentiment-Based Response Scaling**
-Your responses must be **dynamically adjusted** based on the user's sentiment.  
+Your responses must be **dynamically adjusted** based on the users sentiment.  
 
 #### **🟢 Positive Sentiment (User is feeling good, happy, motivated)**  
 📌 Example Input: *"I feel great today!"*  
@@ -192,6 +204,19 @@ Your responses must be **dynamically adjusted** based on the user's sentiment.
 ❌ **No assistance in creating weapons or harmful content.**  
 ❌ **Cautious handling of adult topics, ensuring child-friendliness.**  
 ❌ **Avoid overly sweet or unrealistic comforting language—speak like a real friend.**  
+
+### **🔹 Language & Transliteration Rules**
+✔ **When users type in English transliteration of Hindi:** Respond in Hindi script transliteration in english  , no need for literal translation
+   - Example: User: "aap kaise hain?" → Response: (main bilkul theek hoon!)"
+   - Example: User: "namaste" → Response:  (namaste! kaise ho?)"
+   - Example: User: "kya haal hai" → Response:  (sab badhiya! tumhara kya haal hai?)"
+
+✔ **When users type in English transliteration of Tamil:** Respond in Tamil script transliteration in english  , no need for literal translation
+   - Example: User: "vanakkam" → Response:  (vanakkam! eppadi irukkirirkal?)"
+   - Example: User: "nalla irukken" → Response:  (nalla irukken!)"
+   - Example: User: "epdi irukinga" → Response:  (naan sariya irukken!)"
+
+✔ **Use natural Indian English when responding in English, it should be like a friend talking to you not some ai it should be supear casual like how we share out feeligns with a friend openly like that **
 ---"""
 
 # Initialize Gemini model
@@ -225,7 +250,7 @@ def generate_response(message):
 def analyze_mood(text):
     """Analyze mood from text using Gemini AI"""
     try:
-        prompt = f"""Analyze the following text and determine the user's emotional state. Respond with a JSON object containing:
+        prompt = f"""Analyze the following text and determine the users emotional state. Respond with a JSON object containing:
         {{
             "mood": "primary emotion (happy, sad, anxious, angry, calm, etc.)",
             "intensity": "low/medium/high",
@@ -820,6 +845,52 @@ def get_chat_history():
             'error': 'Internal server error',
             'message': 'Failed to get chat history'
         }), 500
+
+@app.route('/api/tts/synthesize', methods=['POST'])
+@limiter.limit("60 per 15 minutes")
+def synthesize_tts():
+    try:
+      if not GOOGLE_TTS_AVAILABLE:
+          return jsonify({ 'success': False, 'error': 'Google TTS not available' }), 503
+      data = request.get_json() or {}
+      text = (data.get('text') or '').strip()
+      # Accept only three languages: English (India), Hindi, Tamil
+      requested_lang = (data.get('language') or '').strip()
+      allowed_langs = {'en-IN', 'hi-IN', 'ta-IN'}
+      language_code = requested_lang if requested_lang in allowed_langs else 'en-IN'
+      # Reasonable default hints for the three languages
+      default_hints = {
+        'en-IN': 'en-IN-Neural2-A',
+        'hi-IN': 'hi-IN-Neural2-A',
+        'ta-IN': 'ta-IN-Standard-A',
+      }
+      voice_hint = data.get('voiceHint') or default_hints.get(language_code, 'en-IN-Standard-A')
+      if not text:
+          return jsonify({ 'success': False, 'error': 'text is required' }), 400
+
+      client = texttospeech.TextToSpeechClient()
+      synthesis_input = texttospeech.SynthesisInput(text=text)
+
+      # Prefer Indian English female voices
+      voice = texttospeech.VoiceSelectionParams(
+          language_code=language_code,
+          name=voice_hint,  # e.g., en-IN-Neural2-A or en-IN-Standard-A
+          ssml_gender=texttospeech.SsmlVoiceGender.FEMALE
+      )
+      audio_config = texttospeech.AudioConfig(
+          audio_encoding=texttospeech.AudioEncoding.MP3,
+          speaking_rate=float(data.get('rate', 0.95)),
+          pitch=float(data.get('pitch', 0.0))
+      )
+
+      response = client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
+
+      # Return as base64 to keep it simple for the frontend
+      import base64
+      return jsonify({ 'success': True, 'data': { 'audioBase64': base64.b64encode(response.audio_content).decode('utf-8'), 'mime': 'audio/mpeg' } })
+    except Exception as e:
+      logger.error(f"TTS synth error: {e}")
+      return jsonify({ 'success': False, 'error': str(e) }), 500
 
 @app.route('/api/chat/health', methods=['GET'])
 def chat_health():
