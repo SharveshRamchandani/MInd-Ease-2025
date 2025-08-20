@@ -2,6 +2,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Heart, Brain, Smile, Clock } from "lucide-react";
 import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface CopingStrategy {
   id: string;
@@ -81,7 +88,7 @@ interface CopingStrategiesProps {
 }
 
 export const CopingStrategies = ({ currentMood }: CopingStrategiesProps) => {
-  const [expandedStrategy, setExpandedStrategy] = useState<string | null>(null);
+  const [selectedStrategy, setSelectedStrategy] = useState<CopingStrategy | null>(null);
 
   const relevantStrategies = currentMood 
     ? copingStrategies.filter(strategy => 
@@ -89,8 +96,8 @@ export const CopingStrategies = ({ currentMood }: CopingStrategiesProps) => {
       )
     : copingStrategies;
 
-  const toggleStrategy = (id: string) => {
-    setExpandedStrategy(expandedStrategy === id ? null : id);
+  const handleStrategyClick = (strategy: CopingStrategy) => {
+    setSelectedStrategy(strategy);
   };
 
   return (
@@ -109,13 +116,11 @@ export const CopingStrategies = ({ currentMood }: CopingStrategiesProps) => {
       <div className="hidden lg:flex lg:flex-row lg:gap-6 lg:justify-center lg:items-stretch">
         {relevantStrategies.map((strategy) => {
           const Icon = strategy.icon;
-          const isExpanded = expandedStrategy === strategy.id;
 
           return (
             <Card 
               key={strategy.id} 
-              className="flex-1 p-6 lg:p-8 shadow-card transition-gentle hover:shadow-glow cursor-pointer"
-              onClick={() => toggleStrategy(strategy.id)}
+              className="flex-1 p-6 lg:p-8 shadow-card transition-gentle hover:shadow-glow"
             >
               <div className="flex flex-col items-center text-center h-full">
                 <div className={`p-3 lg:p-4 rounded-full bg-${strategy.color} animate-gentle-bounce mb-4 lg:mb-6`}>
@@ -126,29 +131,46 @@ export const CopingStrategies = ({ currentMood }: CopingStrategiesProps) => {
                   <p className="text-sm lg:text-base text-muted-foreground mb-4 lg:mb-6">
                     {strategy.description}
                   </p>
-                  
-                  {isExpanded && (
-                    <div className="space-y-3 lg:space-y-4 mt-4 lg:mt-6 animate-gentle-bounce">
-                      <h4 className="text-sm lg:text-base font-medium">Steps:</h4>
-                      <ol className="space-y-2 lg:space-y-3 text-left">
-                        {strategy.instructions.map((instruction, index) => (
-                          <li key={index} className="text-sm lg:text-base text-muted-foreground flex gap-2">
-                            <span className="text-primary font-medium flex-shrink-0">{index + 1}.</span>
-                            <span>{instruction}</span>
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  )}
                 </div>
                 
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="mt-4 lg:mt-6 text-primary hover:bg-primary/10 text-sm lg:text-base"
-                >
-                  {isExpanded ? "Show Less" : "Try This"}
-                </Button>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="mt-4 lg:mt-6 text-primary hover:bg-primary/10 text-sm lg:text-base"
+                      onClick={() => handleStrategyClick(strategy)}
+                    >
+                      Try This
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-lg lg:max-w-xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader className="text-center">
+                      <DialogTitle className="flex items-center justify-center gap-3 text-lg lg:text-xl">
+                        <div className={`p-3 rounded-full bg-${strategy.color}`}>
+                          <Icon className="w-6 h-6" />
+                        </div>
+                        {strategy.title}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-6 text-center">
+                      <p className="text-base text-muted-foreground">
+                        {strategy.description}
+                      </p>
+                      <div>
+                        <h4 className="text-base font-medium mb-4">Steps:</h4>
+                        <ol className="space-y-3 text-base">
+                          {strategy.instructions.map((instruction, index) => (
+                            <li key={index} className="text-muted-foreground flex gap-3 max-w-sm mx-auto">
+                              <span className="text-primary font-medium flex-shrink-0 min-w-[2rem]">{index + 1}.</span>
+                              <span className="text-center">{instruction}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             </Card>
           );
@@ -159,13 +181,11 @@ export const CopingStrategies = ({ currentMood }: CopingStrategiesProps) => {
       <div className="lg:hidden space-y-4 max-w-md mx-auto">
         {relevantStrategies.map((strategy) => {
           const Icon = strategy.icon;
-          const isExpanded = expandedStrategy === strategy.id;
 
           return (
             <Card 
               key={strategy.id} 
-              className="p-4 shadow-card transition-gentle hover:shadow-glow cursor-pointer"
-              onClick={() => toggleStrategy(strategy.id)}
+              className="p-4 shadow-card transition-gentle hover:shadow-glow"
             >
               <div className="flex items-start gap-3">
                 <div className={`p-2 rounded-full bg-${strategy.color} animate-gentle-bounce`}>
@@ -177,35 +197,50 @@ export const CopingStrategies = ({ currentMood }: CopingStrategiesProps) => {
                     {strategy.description}
                   </p>
                   
-                  {isExpanded && (
-                    <div className="space-y-2 mt-4 animate-gentle-bounce">
-                      <h4 className="text-sm font-medium">Steps:</h4>
-                      <ol className="space-y-1">
-                        {strategy.instructions.map((instruction, index) => (
-                          <li key={index} className="text-sm text-muted-foreground flex gap-2">
-                            <span className="text-primary font-medium">{index + 1}.</span>
-                            {instruction}
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  )}
-                  
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="mt-2 text-primary hover:bg-primary/10"
-                  >
-                    {isExpanded ? "Show Less" : "Try This"}
-                  </Button>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="mt-2 text-primary hover:bg-primary/10"
+                        onClick={() => handleStrategyClick(strategy)}
+                      >
+                        Try This
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-lg lg:max-w-xl max-h-[80vh] overflow-y-auto">
+                      <DialogHeader className="text-center">
+                        <DialogTitle className="flex items-center justify-center gap-3 text-lg lg:text-xl">
+                          <div className={`p-3 rounded-full bg-${strategy.color}`}>
+                            <Icon className="w-6 h-6" />
+                          </div>
+                          {strategy.title}
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-6 text-center">
+                        <p className="text-base text-muted-foreground">
+                          {strategy.description}
+                        </p>
+                        <div>
+                          <h4 className="text-base font-medium mb-2">Steps:</h4>
+                          <ol className="space-y-5 text-base">
+                            {strategy.instructions.map((instruction, index) => (
+                              <li key={index} className="text-muted-foreground flex gap-3 max-w-sm mx-auto">
+                                <span className="text-primary font-medium flex-shrink-0 min-w-[2rem]">{index + 1}.</span>
+                                <span className="text-center">{instruction}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             </Card>
           );
         })}
       </div>
-
-
     </div>
   );
 };

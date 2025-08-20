@@ -5,14 +5,37 @@ import { Button } from "@/components/ui/button";
 import { MotivationalQuote } from "@/components/wellness/motivational-quote";
 import { CopingStrategies } from "@/components/wellness/coping-strategies";
 import { MessageCircle, BarChart3, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
 import heroImage from "@/assets/hero-wellness.jpg";
+
+interface MoodOption {
+  emoji: string;
+  label: string;
+  value: string;
+  color: string;
+}
+
+const moodOptions: MoodOption[] = [
+  { emoji: "😄", label: "Joyful", value: "joy", color: "emotion-joy" },
+  { emoji: "😊", label: "Content", value: "calm", color: "emotion-calm" },
+  { emoji: "😐", label: "Neutral", value: "neutral", color: "emotion-neutral" },
+  { emoji: "😔", label: "Sad", value: "sad", color: "emotion-sad" },
+  { emoji: "😡", label: "Angry", value: "angry", color: "emotion-angry" },
+  { emoji: "😰", label: "Anxious", value: "anxious", color: "emotion-anxious" },
+];
 
 export default function Home(): React.JSX.Element {
   const [todaysMood, setTodaysMood] = useState<string | null>(null);
+  const [selectedMood, setSelectedMood] = useState<string>("");
 
   // Mock data - will be replaced with real data from Firebase
   const recentMoods: string[] = ["😊", "😐", "😄", "😔", "😰", "😡"];
   const streakCount: number = 7;
+
+  const handleMoodSelect = (moodValue: string) => {
+    setSelectedMood(moodValue);
+    setTodaysMood(moodValue);
+  };
 
   return (
     <div className="min-h-screen pb-32 p-4">
@@ -44,7 +67,7 @@ export default function Home(): React.JSX.Element {
                   <div className="space-y-4">
                     <p className="text-lg text-muted-foreground">How are you feeling today?</p>
                     <Link to="/mood">
-                      <Button className="bg-gradient-primary hover:opacity-90 transition-gentle w-full lg:w-auto lg:px-8 lg:py-3 lg:text-lg mt-2">
+                      <Button className="bg-gradient-primary hover:opacity-90 transition-gentle w-full lg:w-auto lg:px-8 lg:py-3 lg:text-lg">
                         <Plus className="w-4 h-4 lg:w-5 lg:h-5 mr-2" />
                         Log Your Mood
                       </Button>
@@ -55,7 +78,7 @@ export default function Home(): React.JSX.Element {
                     <div className="text-4xl lg:text-5xl">{todaysMood}</div>
                     <p className="text-base text-muted-foreground">Mood logged for today</p>
                     <Link to="/mood">
-                      <Button variant="outline" size="lg" className="animate-reduced-bounce">Update Mood</Button>
+                      <Button variant="outline" size="lg">Update Mood</Button>
                     </Link>
                   </div>
                 )}
@@ -153,7 +176,7 @@ export default function Home(): React.JSX.Element {
                 <div className="space-y-3">
                   <p className="text-muted-foreground">How are you feeling today?</p>
                   <Link to="/mood">
-                    <Button className="bg-gradient-primary hover:opacity-90 transition-gentle w-full mt-2">
+                    <Button className="bg-gradient-primary hover:opacity-90 transition-gentle w-full">
                       <Plus className="w-4 h-4 mr-2" />
                       Log Your Mood
                     </Button>
@@ -163,9 +186,9 @@ export default function Home(): React.JSX.Element {
                 <div className="space-y-3">
                   <div className="text-3xl">{todaysMood}</div>
                   <p className="text-sm text-muted-foreground">Mood logged for today</p>
-                                      <Link to="/mood">
-                      <Button variant="outline" size="sm" className="animate-reduced-bounce">Update Mood</Button>
-                    </Link>
+                  <Link to="/mood">
+                    <Button variant="outline" size="sm">Update Mood</Button>
+                  </Link>
                 </div>
               )}
             </div>

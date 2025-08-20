@@ -2,8 +2,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Home, MessageCircle, BarChart3, BookOpen, Moon, Sun, Monitor, LogOut } from "lucide-react";
 import { Button } from "./button";
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,36 +69,8 @@ export const Navigation = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
-  const [currentTheme, setCurrentTheme] = useState('system');
+  const { theme, setTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    // Check current theme from localStorage or system preference
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme) {
-      setCurrentTheme(savedTheme);
-    } else {
-      // Check system preference
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      setCurrentTheme('system');
-    }
-  }, []);
-
-  const setTheme = (theme: string) => {
-    setCurrentTheme(theme);
-    localStorage.setItem('theme', theme);
-    
-    // Apply theme
-    const root = document.documentElement;
-    root.classList.remove('light', 'dark');
-    
-    if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      root.classList.add(systemTheme);
-    } else {
-      root.classList.add(theme);
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -148,7 +121,7 @@ export const Navigation = () => {
                   ? "text-primary" 
                   : "text-muted-foreground"
               )}>
-                <ThemeIcon theme={currentTheme} />
+                <ThemeIcon theme={theme} />
               </div>
               <span className={cn(
                 "text-xs font-medium text-center",
@@ -170,17 +143,17 @@ export const Navigation = () => {
               return (
                 <DropdownMenuItem
                   key={option.value}
-                  onClick={() => setTheme(option.value)}
+                  onClick={() => setTheme(option.value as 'light' | 'dark' | 'system')}
                   className={cn(
                     "flex items-center gap-3 p-3 cursor-pointer transition-colors",
-                    currentTheme === option.value 
+                    theme === option.value 
                       ? "bg-primary/10 text-primary" 
                       : "hover:bg-muted/50"
                   )}
                 >
                   <Icon className="w-4 h-4" />
                   <span className="text-sm font-medium">{option.label}</span>
-                  {currentTheme === option.value && (
+                  {theme === option.value && (
                     <div className="ml-auto w-2 h-2 bg-primary rounded-full" />
                   )}
                 </DropdownMenuItem>
