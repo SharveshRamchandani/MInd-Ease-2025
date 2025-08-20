@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Calendar, TrendingUp, Download, BarChart3, Clock, Activity } from "lucide-react";
+import { ArrowLeft, Calendar as CalendarIcon, TrendingUp, Download, BarChart3, Clock, Activity } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Calendar } from "@/components/ui/calendar";
+import { format, isSameDay } from "date-fns";
 
 interface MoodEntry {
   id: string;
@@ -57,6 +59,85 @@ const mockMoodHistory: MoodEntry[] = [
     timestamp: new Date(Date.now() - 345600000),
   },
 ];
+
+const moodToBgClass: Record<string, string> = {
+  joy: "bg-amber-100",
+  calm: "bg-sky-100",
+  neutral: "bg-slate-100",
+  sad: "bg-blue-100",
+  angry: "bg-red-100",
+  anxious: "bg-purple-100",
+};
+
+const MoodCalendar = () => {
+  // Map each date to its latest mood entry
+  const dateKeyToEntry = mockMoodHistory.reduce<Record<string, MoodEntry>>((acc, entry) => {
+    const key = format(entry.timestamp, "yyyy-MM-dd");
+    acc[key] = entry;
+    return acc;
+  }, {});
+
+  const DayCell = (props: any) => {
+    const date: Date = props.date;
+    const key = format(date, "yyyy-MM-dd");
+    const entry = dateKeyToEntry[key];
+    const dayNum = date.getDate();
+    if (entry) {
+      return (
+        <div className="h-9 w-9 flex items-center justify-center">
+          <div className={`h-8 w-8 rounded-full flex items-center justify-center text-base ${moodToBgClass[entry.mood] || "bg-muted"}`}>
+            <span aria-label={entry.mood}>{entry.emoji}</span>
+          </div>
+        </div>
+      );
+    }
+    // default day number muted circle
+    return (
+      <div className="h-9 w-9 flex items-center justify-center">
+        <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs text-muted-foreground bg-muted/40">
+          {dayNum}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <Card className="p-6 shadow-card">
+      <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+        <CalendarIcon className="w-5 h-5" />
+        Monthly Mood Calendar
+      </h3>
+      <Calendar
+        className="w-full"
+        classNames={{
+          // header
+          caption: "grid grid-cols-[auto_1fr_auto] items-center px-3",
+          caption_label: "col-start-2 text-center text-sm font-medium",
+          nav: "contents",
+          nav_button:
+            "h-8 w-8 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted/60",
+          nav_button_previous: "col-start-1 justify-self-start",
+          nav_button_next: "col-start-3 justify-self-end",
+
+          // grid
+          months: "w-full",
+          month: "w-full",
+          table: "w-full border-collapse",
+          head_row: "grid grid-cols-7",
+          head_cell: "text-muted-foreground text-center text-xs",
+          row: "grid grid-cols-7",
+          cell: "p-1 text-center",
+          day: "w-full h-10 p-0 flex items-center justify-center",
+        }}
+        components={{ Day: DayCell as any }}
+        showOutsideDays
+        captionLayout="buttons"
+        mode="single"
+        defaultMonth={new Date()}
+      />
+    </Card>
+  );
+};
 
 const MoodChart = () => {
   const moodScores = {
@@ -192,6 +273,9 @@ export default function History() {
               </div>
             </Card>
 
+            {/* Monthly Mood Calendar (placed right below distribution) */}
+            <MoodCalendar />
+
             {/* Export Option */}
             <Card className="p-6 shadow-card">
               <div className="flex items-center justify-between">
@@ -292,6 +376,9 @@ export default function History() {
               })}
             </div>
           </Card>
+
+          {/* Monthly Mood Calendar (placed right below distribution) */}
+          <MoodCalendar />
 
           {/* Tabs for different views */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>

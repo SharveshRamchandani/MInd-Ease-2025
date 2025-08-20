@@ -13,6 +13,7 @@ import Chat from "./pages/Chat";
 import History from "./pages/History";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import Journal from "./pages/Journal";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,11 @@ const AppContent = () => {
         <Route path="/history" element={
           <ProtectedRoute>
             <History />
+          </ProtectedRoute>
+        } />
+        <Route path="/journal" element={
+          <ProtectedRoute>
+            <Journal />
           </ProtectedRoute>
         } />
         <Route path="/login" element={<Login />} />

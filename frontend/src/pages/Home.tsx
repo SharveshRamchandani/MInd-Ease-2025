@@ -7,6 +7,7 @@ import { CopingStrategies } from "@/components/wellness/coping-strategies";
 import { MessageCircle, BarChart3, Plus, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import heroImage from "@/assets/hero-wellness.jpg";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface MoodOption {
   emoji: string;
@@ -127,6 +128,51 @@ const MoodChart = () => {
   );
 };
 
+// Reusable modal with info about mood tracking
+const MoodTrackingInfoModal: React.FC = () => {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="text-primary  hover:no-underline">
+          Know more about mood tracking
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>About Mood Tracking</DialogTitle>
+          <DialogDescription>
+            Learn why tracking your mood matters and tips to make it more accurate.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <Card className="p-4">
+            <h3 className="text-lg font-semibold mb-2">Why track your mood?</h3>
+            <div className="space-y-2 text-muted-foreground">
+              <p>Regular mood tracking helps you:</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Identify patterns in your emotional well-being</li>
+                <li>Recognize triggers and coping strategies that work</li>
+                <li>Communicate more effectively with healthcare providers</li>
+                <li>Celebrate progress and positive changes</li>
+              </ul>
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <h3 className="text-lg font-semibold mb-2">Tips for accurate tracking</h3>
+            <div className="space-y-1 text-muted-foreground">
+              <p>• Check in at the same time each day</p>
+              <p>• Be honest about how you're feeling</p>
+              <p>• Note any significant events or changes</p>
+              <p>• Remember that all feelings are valid</p>
+            </div>
+          </Card>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 export default function Home(): React.JSX.Element {
   const [todaysMood, setTodaysMood] = useState<string | null>(null);
   const [selectedMood, setSelectedMood] = useState<string>("");
@@ -163,7 +209,10 @@ export default function Home(): React.JSX.Element {
             </div>
 
             {/* Quick Check-in */}
-            <Card className="p-6 lg:p-8 shadow-card">
+            <Card className="relative p-6 lg:p-8 shadow-card">
+              <div className="absolute top-4 right-4">
+                <MoodTrackingInfoModal />
+              </div>
               <div className="text-center space-y-4">
                 <h2 className="text-2xl lg:text-3xl font-semibold">Daily Check-in</h2>
                 {!todaysMood ? (
@@ -271,7 +320,10 @@ export default function Home(): React.JSX.Element {
           </div>
 
           {/* Quick Check-in */}
-          <Card className="p-6 shadow-card">
+          <Card className="relative p-6 shadow-card">
+            <div className="absolute top-4 right-4">
+              <MoodTrackingInfoModal />
+            </div>
             <div className="text-center space-y-4">
               <h2 className="text-xl font-semibold">Daily Check-in</h2>
               {!todaysMood ? (
