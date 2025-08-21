@@ -321,7 +321,10 @@ export default function Home(): React.JSX.Element {
               />
               <div className="absolute inset-0 bg-gradient-primary/80 flex items-center justify-center">
                 <div className="text-center text-amber-900 dark:text-slate-800">
-                  <h1 className="text-3xl lg:text-4xl font-bold mb-2 drop-shadow-lg">Welcome to Mind-Ease</h1>
+                  <h1 className="text-3xl lg:text-4xl font-bold mb-2 drop-shadow-lg">
+                    Welcome to Mind-Ease <br></br>
+                    {currentUser?.displayName ? ` ${currentUser.displayName}` : ""}
+                  </h1>
                   <p className="text-lg text-amber-800 dark:text-slate-700 drop-shadow-md">Your personal wellness companion</p>
                 </div>
               </div>
@@ -415,7 +418,9 @@ export default function Home(): React.JSX.Element {
             />
             <div className="absolute inset-0 bg-gradient-primary/80 flex items-center justify-center">
               <div className="text-center text-amber-900 dark:text-slate-800">
-                <h1 className="text-2xl font-bold mb-2 drop-shadow-lg">Welcome to Mind-Ease</h1>
+                <h1 className="text-2xl font-bold mb-2 drop-shadow-lg">
+                  Welcome{currentUser?.displayName ? `, ${currentUser.displayName}` : ""} to Mind-Ease
+                </h1>
                 <p className="text-amber-800 dark:text-slate-700 drop-shadow-md">Your personal wellness companion</p>
               </div>
             </div>

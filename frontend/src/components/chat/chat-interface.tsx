@@ -131,59 +131,57 @@ export const ChatInterface = ({ onSendMessage, isLoading = false, initialMessage
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto space-y-3 p-3">
+      <div className="flex-1 overflow-y-auto p-4">
         {messages.map((message) => (
           <div
             key={message.id}
             className={cn(
-              "flex gap-3",
+              "flex items-end gap-2 mb-4", // Adjusted margin and alignment
               message.sender === "user" ? "justify-end" : "justify-start"
             )}
           >
             {message.sender === "ai" && (
-              <div className="flex-shrink-0 w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center">
+              <div className="flex-shrink-0 w-8 h-8 mb-1 bg-gradient-primary rounded-full flex items-center justify-center">
                 <Bot className="w-4 h-4 text-primary-foreground" />
               </div>
             )}
             
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 max-w-[75%]"> {/* Constrained width */}
               <Card className={cn(
-                "max-w-[75%] w-auto inline-flex items-baseline gap-1 px-2.5 py-1 shadow-card",
+                "px-3 py-2", // Adjusted padding
                 message.sender === "user" 
                   ? "bg-primary text-primary-foreground" 
                   : "bg-card"
               )}>
-                <p className="text-[15px] leading-5 whitespace-pre-wrap break-words m-0 max-w-full">
-                  {message.content}
-                </p>
-                <span className="text-[10px] opacity-70 whitespace-nowrap leading-4">
-                  {message.timestamp.toLocaleTimeString([], { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
-                </span>
-              </Card>
-              
-              {/* Speaker button for AI messages only */}
-              {message.sender === "ai" && voiceSupported && (
-                <div className="flex justify-start">
-                  <Button
-                    onClick={() => handleReadMessage(message.content, message.id)}
-                    disabled={isLoading}
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs hover:bg-muted/50 transition-all duration-200"
-                    title="Read this message"
-                  >
-                    <Volume2 className="w-3 h-3 mr-1" />
-                    Read
-                  </Button>
+                <div className="flex flex-col gap-1">
+                  <p className="text-[15px] leading-5 break-words">
+                    {message.content}
+                  </p>
+                  <span className="text-[10px] opacity-70 self-end"> {/* Aligned timestamp */}
+                    {message.timestamp.toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </span>
                 </div>
+              </Card>
+
+              {message.sender === "ai" && voiceSupported && (
+                <Button
+                  onClick={() => handleReadMessage(message.content, message.id)}
+                  disabled={isLoading}
+                  variant="ghost"
+                  size="sm"
+                  className="self-start h-6 px-2 text-xs hover:bg-muted/50"
+                >
+                  <Volume2 className="w-3 h-3 mr-1" />
+                  Read
+                </Button>
               )}
             </div>
 
             {message.sender === "user" && (
-              <div className="flex-shrink-0 w-8 h-8 bg-accent rounded-full flex items-center justify-center">
+              <div className="flex-shrink-0 w-8 h-8 mb-1 bg-accent rounded-full flex items-center justify-center">
                 <User className="w-4 h-4 text-accent-foreground" />
               </div>
             )}
