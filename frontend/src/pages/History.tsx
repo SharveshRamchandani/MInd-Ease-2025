@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Calendar as CalendarIcon, TrendingUp, Download, BarChart3, Clock, Activity } from "lucide-react";
+import { ArrowLeft, Calendar as CalendarIcon, TrendingUp, Download, BarChart3, Clock, Activity, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
-import { format, isSameDay } from "date-fns";
+import { format, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval, isWithinInterval } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface MoodEntry {
   id: string;
@@ -14,52 +16,10 @@ interface MoodEntry {
   emoji: string;
   journal?: string;
   timestamp: Date;
+  user_id: string;
 }
 
-// Mock data - replace with Firebase data
-const mockMoodHistory: MoodEntry[] = [
-  {
-    id: "1",
-    date: "Today",
-    mood: "calm",
-    emoji: "😊",
-    journal: "Had a peaceful morning meditation and felt centered throughout the day.",
-    timestamp: new Date(),
-  },
-  {
-    id: "2",
-    date: "Yesterday",
-    mood: "joy",
-    emoji: "😄",
-    journal: "Great day with friends! Feeling grateful and happy.",
-    timestamp: new Date(Date.now() - 86400000),
-  },
-  {
-    id: "3",
-    date: "2 days ago",
-    mood: "anxious",
-    emoji: "😰",
-    journal: "Work stress was high today. Used breathing exercises which helped.",
-    timestamp: new Date(Date.now() - 172800000),
-  },
-  {
-    id: "4",
-    date: "3 days ago",
-    mood: "neutral",
-    emoji: "😐",
-    journal: "Regular day, nothing special happened.",
-    timestamp: new Date(Date.now() - 259200000),
-  },
-  {
-    id: "5",
-    date: "4 days ago",
-    mood: "sad",
-    emoji: "😔",
-    journal: "Feeling a bit down today. Talked to a friend which helped.",
-    timestamp: new Date(Date.now() - 345600000),
-  },
-];
-
+// Remove static mock data - will be fetched dynamically
 const moodToBgClass: Record<string, string> = {
   joy: "bg-amber-100",
   calm: "bg-sky-100",
@@ -69,9 +29,18 @@ const moodToBgClass: Record<string, string> = {
   anxious: "bg-purple-100",
 };
 
-const MoodCalendar = () => {
+const moodToEmoji: Record<string, string> = {
+  joy: "😄",
+  calm: "😊",
+  neutral: "😐",
+  sad: "😔",
+  angry: "😡",
+  anxious: "😰",
+};
+
+const MoodCalendar = ({ moodHistory }: { moodHistory: MoodEntry[] }) => {
   // Map each date to its latest mood entry
-  const dateKeyToEntry = mockMoodHistory.reduce<Record<string, MoodEntry>>((acc, entry) => {
+  const dateKeyToEntry = moodHistory.reduce<Record<string, MoodEntry>>((acc, entry) => {
     const key = format(entry.timestamp, "yyyy-MM-dd");
     acc[key] = entry;
     return acc;
@@ -139,7 +108,7 @@ const MoodCalendar = () => {
   );
 };
 
-const MoodChart = () => {
+const MoodChart = ({ moodHistory }: { moodHistory: MoodEntry[] }) => {
   const moodScores = {
     joy: 5,
     calm: 4,
@@ -149,7 +118,11 @@ const MoodChart = () => {
     angry: 1,
   };
 
-  const chartData = mockMoodHistory.slice(0, 7).reverse();
+  // Get last 7 days of mood entries
+  const last7Days = moodHistory
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 7)
+    .reverse();
 
   return (
     <Card className="p-6 shadow-card">
@@ -158,13 +131,14 @@ const MoodChart = () => {
         7-Day Mood Trend
       </h3>
       <div className="space-y-4">
-        {chartData.map((entry, index) => {
+        {last7Days.map((entry, index) => {
           const score = moodScores[entry.mood as keyof typeof moodScores];
           const width = (score / 5) * 100;
+          const dateLabel = format(entry.timestamp, "MMM dd");
           
           return (
             <div key={entry.id} className="flex items-center gap-4">
-              <div className="w-20 text-sm text-muted-foreground">{entry.date}</div>
+              <div className="w-20 text-sm text-muted-foreground">{dateLabel}</div>
               <div className="flex-1 bg-muted rounded-full h-8 flex items-center">
                 <div 
                   className="h-full bg-gradient-primary rounded-full flex items-center justify-end pr-3 transition-gentle"
@@ -182,17 +156,17 @@ const MoodChart = () => {
   );
 };
 
-const MoodList = () => {
+const MoodList = ({ moodHistory }: { moodHistory: MoodEntry[] }) => {
   return (
     <div className="space-y-4">
-      {mockMoodHistory.map((entry) => (
+      {moodHistory.map((entry) => (
         <Card key={entry.id} className="p-6 shadow-card">
           <div className="flex items-start gap-4">
             <div className="text-3xl">{entry.emoji}</div>
             <div className="flex-1">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-lg font-medium capitalize">{entry.mood}</h4>
-                <span className="text-sm text-muted-foreground">{entry.date}</span>
+                <span className="text-sm text-muted-foreground">{format(entry.timestamp, "MMM dd, yyyy")}</span>
               </div>
               {entry.journal && (
                 <p className="text-muted-foreground leading-relaxed">
@@ -209,14 +183,143 @@ const MoodList = () => {
 
 export default function History() {
   const [activeTab, setActiveTab] = useState("timeline");
+  const [moodHistory, setMoodHistory] = useState<MoodEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { currentUser } = useAuth();
+  const { toast } = useToast();
 
-  const moodCounts = mockMoodHistory.reduce((acc, entry) => {
+  // Calculate statistics from mood history
+  const calculateStreak = (moods: any[]) => {
+    if (moods.length === 0) return 0;
+    
+    let streak = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    for (let i = 0; i < 30; i++) {
+      const checkDate = new Date(today);
+      checkDate.setDate(today.getDate() - i);
+      
+      const hasMoodOnDate = moods.some(mood => {
+        const moodDate = new Date(mood.timestamp);
+        moodDate.setHours(0, 0, 0, 0);
+        return moodDate.getTime() === checkDate.getTime();
+      });
+      
+      if (hasMoodOnDate) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  };
+
+  const calculateTotalMoods = (moods: any[]) => {
+    return moods.length;
+  };
+
+  const streak = calculateStreak(moodHistory);
+  const totalMoods = calculateTotalMoods(moodHistory);
+
+  // Calculate mood distribution
+  const moodCounts = moodHistory.reduce((acc, entry) => {
     acc[entry.mood] = (acc[entry.mood] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  const totalEntries = mockMoodHistory.length;
-  const currentStreak = 7; // Mock streak
+  // Fetch mood history from Firebase
+  const fetchMoodHistory = async (showLoading = true) => {
+    if (!currentUser) return;
+    
+    if (showLoading) setIsLoading(true);
+    setIsRefreshing(true);
+    
+    try {
+      // Get Firebase ID token for authentication
+      const token = await currentUser.getIdToken();
+      
+      const response = await fetch(`http://localhost:5000/api/mood/history`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Convert timestamp strings to Date objects
+          const history = data.data.mood_logs.map((entry: any) => ({
+            ...entry,
+            timestamp: new Date(entry.timestamp),
+            emoji: moodToEmoji[entry.mood] || "😐"
+          }));
+          setMoodHistory(history);
+          console.log('Fetched mood history:', history); // Debug log
+          
+          if (showLoading) {
+            toast({
+              title: "Mood history loaded",
+              description: `Found ${history.length} mood entries`,
+            });
+          }
+        } else {
+          console.error('API returned error:', data.error);
+          toast({
+            title: "Error loading mood history",
+            description: data.error || "Please try again later.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        console.error('HTTP error:', response.status, response.statusText);
+        toast({
+          title: "Error loading mood history",
+          description: `HTTP ${response.status}: ${response.statusText}`,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching mood history:', error);
+      toast({
+        title: "Error loading mood history",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    } finally {
+      if (showLoading) setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMoodHistory(true);
+  }, [currentUser]);
+
+  // Auto-refresh every 30 seconds to keep data fresh
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    const interval = setInterval(() => {
+      fetchMoodHistory(false); // Don't show loading state for auto-refresh
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen pb-20 p-4 lg:pb-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center py-20">
+            <div className="text-xl">Loading your mood history...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-20 p-4 lg:pb-4">
@@ -225,23 +328,37 @@ export default function History() {
         <div className="hidden lg:grid lg:grid-cols-12 lg:gap-8 lg:space-y-0">
           {/* Left Column - Stats and Overview */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="flex items-center gap-3 mb-6">
-              <Link to="/">
-                <Button variant="ghost" size="sm">
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
-              </Link>
-              <h1 className="text-2xl font-semibold">Mood History</h1>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <Link to="/">
+                  <Button variant="ghost" size="sm">
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                </Link>
+                <h1 className="text-2xl font-semibold">Mood History</h1>
+              </div>
+              
+              {/* Refresh Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchMoodHistory(false)}
+                disabled={isRefreshing}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
             </div>
 
             {/* Stats Overview */}
             <div className="grid grid-cols-2 gap-4">
               <Card className="p-6 shadow-card text-center bg-gradient-calm">
-                <div className="text-3xl font-bold text-secondary-foreground">{totalEntries}</div>
-                <p className="text-sm text-secondary-foreground/70">Total Check-ins</p>
+                <div className="text-3xl font-bold text-secondary-foreground">{totalMoods}</div>
+                <p className="text-sm text-secondary-foreground/70">Total Mood Entries</p>
               </Card>
               <Card className="p-6 shadow-card text-center bg-gradient-sunset">
-                <div className="text-3xl font-bold text-accent-foreground">{currentStreak}</div>
+                <div className="text-3xl font-bold text-accent-foreground">{streak}</div>
                 <p className="text-sm text-accent-foreground/70">Day Streak</p>
               </Card>
             </div>
@@ -254,8 +371,8 @@ export default function History() {
               </h3>
               <div className="space-y-3">
                 {Object.entries(moodCounts).map(([mood, count]) => {
-                  const percentage = (count / totalEntries) * 100;
-                  const emoji = mockMoodHistory.find(entry => entry.mood === mood)?.emoji || "😐";
+                  const percentage = totalMoods > 0 ? (count / totalMoods) * 100 : 0;
+                  const emoji = moodToEmoji[mood] || "😐";
                   
                   return (
                     <div key={mood} className="flex items-center gap-3">
@@ -273,8 +390,8 @@ export default function History() {
               </div>
             </Card>
 
-            {/* Monthly Mood Calendar (placed right below distribution) */}
-            <MoodCalendar />
+            {/* Monthly Mood Calendar */}
+            <MoodCalendar moodHistory={moodHistory} />
 
             {/* Export Option */}
             <Card className="p-6 shadow-card">
@@ -297,9 +414,17 @@ export default function History() {
                 Insights
               </h3>
               <div className="space-y-3 text-sm text-muted-foreground">
-                <p>• You've been consistent with daily check-ins</p>
-                <p>• Your most common mood is calm</p>
-                <p>• Consider journaling more during anxious periods</p>
+                {totalMoods === 0 ? (
+                  <p>• Start your mood tracking journey today!</p>
+                ) : (
+                  <>
+                    <p>• You've logged {totalMoods} mood entries</p>
+                    <p>• Your current streak is {streak} days</p>
+                    {Object.keys(moodCounts).length > 0 && (
+                      <p>• Your most common mood is {Object.entries(moodCounts).sort(([,a], [,b]) => b - a)[0][0]}</p>
+                    )}
+                  </>
+                )}
               </div>
             </Card>
           </div>
@@ -320,11 +445,23 @@ export default function History() {
               </TabsList>
               
               <TabsContent value="timeline" className="mt-6">
-                <MoodList />
+                {moodHistory.length === 0 ? (
+                  <Card className="p-8 text-center">
+                    <p className="text-muted-foreground">No mood entries yet. Start tracking your mood to see your history here!</p>
+                  </Card>
+                ) : (
+                  <MoodList moodHistory={moodHistory} />
+                )}
               </TabsContent>
               
               <TabsContent value="chart" className="mt-6">
-                <MoodChart />
+                {moodHistory.length === 0 ? (
+                  <Card className="p-8 text-center">
+                    <p className="text-muted-foreground">No mood entries yet. Start tracking your mood to see your trends here!</p>
+                  </Card>
+                ) : (
+                  <MoodChart moodHistory={moodHistory} />
+                )}
               </TabsContent>
             </Tabs>
           </div>
@@ -332,23 +469,37 @@ export default function History() {
 
         {/* Mobile Layout */}
         <div className="lg:hidden max-w-md mx-auto space-y-6">
-          <div className="flex items-center gap-3 mb-6">
-            <Link to="/">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-            </Link>
-            <h1 className="text-xl font-semibold">Mood History</h1>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <Link to="/">
+                <Button variant="ghost" size="sm">
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
+              </Link>
+              <h1 className="text-xl font-semibold">Mood History</h1>
+            </div>
+            
+            {/* Refresh Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchMoodHistory(false)}
+              disabled={isRefreshing}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
           </div>
 
           {/* Stats Overview */}
           <div className="grid grid-cols-2 gap-4">
             <Card className="p-4 shadow-card text-center bg-gradient-calm">
-              <div className="text-2xl font-bold text-secondary-foreground">{totalEntries}</div>
-              <p className="text-sm text-secondary-foreground/70">Total Check-ins</p>
+              <div className="text-2xl font-bold text-secondary-foreground">{totalMoods}</div>
+              <p className="text-sm text-secondary-foreground/70">Total Mood Entries</p>
             </Card>
             <Card className="p-4 shadow-card text-center bg-gradient-sunset">
-              <div className="text-2xl font-bold text-accent-foreground">{currentStreak}</div>
+              <div className="text-2xl font-bold text-accent-foreground">{streak}</div>
               <p className="text-sm text-accent-foreground/70">Day Streak</p>
             </Card>
           </div>
@@ -358,8 +509,8 @@ export default function History() {
             <h3 className="font-semibold mb-3">Mood Distribution</h3>
             <div className="space-y-2">
               {Object.entries(moodCounts).map(([mood, count]) => {
-                const percentage = (count / totalEntries) * 100;
-                const emoji = mockMoodHistory.find(entry => entry.mood === mood)?.emoji || "😐";
+                const percentage = totalMoods > 0 ? (count / totalMoods) * 100 : 0;
+                const emoji = moodToEmoji[mood] || "😐";
                 
                 return (
                   <div key={mood} className="flex items-center gap-2">
@@ -377,8 +528,8 @@ export default function History() {
             </div>
           </Card>
 
-          {/* Monthly Mood Calendar (placed right below distribution) */}
-          <MoodCalendar />
+          {/* Monthly Mood Calendar */}
+          <MoodCalendar moodHistory={moodHistory} />
 
           {/* Tabs for different views */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -388,11 +539,23 @@ export default function History() {
             </TabsList>
             
             <TabsContent value="timeline" className="mt-4">
-              <MoodList />
+              {moodHistory.length === 0 ? (
+                <Card className="p-6 text-center">
+                  <p className="text-muted-foreground">No mood entries yet. Start tracking your mood to see your history here!</p>
+                </Card>
+              ) : (
+                <MoodList moodHistory={moodHistory} />
+              )}
             </TabsContent>
             
             <TabsContent value="chart" className="mt-4">
-              <MoodChart />
+              {moodHistory.length === 0 ? (
+                <Card className="p-6 text-center">
+                  <p className="text-muted-foreground">No mood entries yet. Start tracking your mood to see your trends here!</p>
+                </Card>
+              ) : (
+                <MoodChart moodHistory={moodHistory} />
+              )}
             </TabsContent>
           </Tabs>
 

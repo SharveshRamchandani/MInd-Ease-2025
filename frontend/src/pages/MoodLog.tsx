@@ -7,29 +7,70 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function MoodLog() {
   const [isLoading, setIsLoading] = useState(false);
   const [savedMood, setSavedMood] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { currentUser } = useAuth();
 
   const handleMoodSubmit = async (mood: string, journal: string) => {
+    if (!currentUser) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to save your mood.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     
     try {
-      // Simulate API call - replace with actual Firebase/backend call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Get Firebase ID token for authentication
+      const token = await currentUser.getIdToken();
       
-      // Mock successful save
-      setSavedMood(mood);
-      
-      toast({
-        title: "Mood saved successfully!",
-        description: "Your daily check-in has been recorded.",
+      // Save mood to Firebase via backend API
+      const response = await fetch('http://localhost:5000/api/mood/log', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          mood: mood,
+          journal: journal || '',
+          timestamp: new Date().toISOString()
+        })
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to save mood');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Mood saved successfully
+        setSavedMood(mood);
+        
+        toast({
+          title: "Mood saved successfully!",
+          description: "Your daily check-in has been recorded.",
+        });
+
+        // Redirect to History page after a short delay to show the saved mood
+        setTimeout(() => {
+          navigate('/history');
+        }, 2000);
+      } else {
+        throw new Error(data.error || 'Failed to save mood');
+      }
       
     } catch (error) {
+      console.error('Error saving mood:', error);
       toast({
         title: "Error saving mood",
         description: "Please try again later.",

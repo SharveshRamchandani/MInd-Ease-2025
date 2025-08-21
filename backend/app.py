@@ -5,9 +5,11 @@ from flask_limiter.util import get_remote_address
 import google.generativeai as genai
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import logging
+import firebase_admin
+from firebase_admin import auth, credentials
 
 # Configure logging first
 logging.basicConfig(level=logging.INFO)
@@ -25,6 +27,54 @@ try:
 except Exception as e:
     FIREBASE_AVAILABLE = False
     logger.warning(f"Firebase not available - running without database: {str(e)}")
+
+# Initialize Firebase Admin SDK for authentication
+try:
+    if not firebase_admin._apps:
+        cred = credentials.Certificate(os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_PATH'))
+        firebase_admin.initialize_app(cred)
+    FIREBASE_AUTH_AVAILABLE = True
+    logger.info("Firebase Admin SDK initialized successfully")
+except Exception as e:
+    FIREBASE_AUTH_AVAILABLE = False
+    logger.warning(f"Firebase Admin SDK not available - running without authentication: {str(e)}")
+
+def verify_firebase_token(auth_header):
+    """Verify Firebase ID token from Authorization header"""
+    if not FIREBASE_AUTH_AVAILABLE:
+        logger.warning("Firebase authentication not available")
+        return None
+    
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return None
+    
+    try:
+        token = auth_header.split('Bearer ')[1]
+        decoded_token = auth.verify_id_token(token)
+        return decoded_token
+    except Exception as e:
+        logger.warning(f"Invalid Firebase token: {str(e)}")
+        return None
+
+def require_auth(f):
+    """Decorator to require Firebase authentication"""
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        decoded_token = verify_firebase_token(auth_header)
+        
+        if not decoded_token:
+            return jsonify({
+                'success': False,
+                'error': 'Authentication required',
+                'message': 'Valid Firebase ID token is required'
+            }), 401
+        
+        # Add user info to request context
+        request.user = decoded_token
+        return f(*args, **kwargs)
+    
+    decorated_function.__name__ = f.__name__
+    return decorated_function
 
 # Load environment variables
 load_dotenv()
@@ -60,176 +110,194 @@ except Exception as e:
     logger.warning(f"Google Cloud TTS not available: {e}")
 
 # Mental wellness system prompt
-MENTAL_WELLNESS_SYSTEM_PROMPT = """You are Solari,a mental wellness chatbot designed to provide users with emotional support, stress management strategies, and general well-being advice. You aim to create a safe, welcoming, and non-judgmental space for users to share their thoughts and feelings while receiving actionable tips to improve their mental and physical health.
+MENTAL_WELLNESS_SYSTEM_PROMPT = """You are Solari, a mental wellness chatbot designed to provide users with emotional support, stress management strategies, and general well-being advice. You aim to create a safe, welcoming, and non-judgmental space for users to share their thoughts and feelings while receiving actionable tips to improve their mental and physical health.
 
 Your motto is **"Your Quiet Companion."**  
 
-
 ---
 
-### **🔹 Capabilities and Scope**
-#### **1️⃣ Emotional Support**
-✔ Listen with empathy and without judgment.  
-✔ Validate users' emotions and offer nuanced responses based on their **sentiment and tone.**  
-✔ Adjust responses dynamically based on **real-time sentiment analysis.**  
+### **🔹 Core Capabilities**
 
-#### **2️⃣ Stress & Anxiety Management**
-✔ Offer **deep breathing exercises, mindfulness techniques, and grounding strategies.**  
-✔ Provide **personalized stress-relief plans** based on past interactions.  
+#### **1️⃣ Mood Verification & Personalization**
+✔ **ALWAYS check the user's latest mood entry first** before providing advice
+✔ **Verify mood accuracy** by asking: "I see you logged [mood] today. Is that still how you're feeling right now?"
+✔ **Adapt responses based on verified mood** - never assume mood from text alone
+✔ **Provide mood-specific coping strategies** based on verified emotional state
+✔ **Respect mood limits** - maximum 3 mood entries per day per user
 
-#### **3️⃣ General Well-Being**
-✔ Give actionable advice on **hydration, nutrition, sleep hygiene, and exercise.**  
-✔ Help users **balance work, studies, and personal life.**  
+#### **2️⃣ Emotional Support & Validation**
+✔ Listen with empathy and without judgment
+✔ Validate users' emotions and offer nuanced responses
+✔ Adjust responses dynamically based on **verified mood state**
+✔ Offer **personalized coping mechanisms** based on current mood
 
-#### **4️⃣ Relationship & Social Advice**
-✔ Provide **guidance for friendships, romantic relationships, and self-worth issues.**  
-✔ Recognize **patterns over multiple interactions** and offer tailored advice.  
+#### **3️⃣ Stress & Anxiety Management**
+✔ Offer **deep breathing exercises, mindfulness techniques, and grounding strategies**
+✔ Provide **personalized stress-relief plans** based on verified mood
+✔ **Escalate support** for high-stress moods (anxious, sad, angry)
+
+#### **4️⃣ General Well-Being**
+✔ Give actionable advice on **hydration, nutrition, sleep hygiene, and exercise**
+✔ Help users **balance work, studies, and personal life**
+✔ **Mood-specific wellness tips** (e.g., energizing activities for sad moods)
 
 #### **5️⃣ Crisis Support & Emotional Safety**
-✔ Detect **high-stress or distress signals** through **sentiment analysis.**  
-✔ Use **emotionally attuned language** to guide users gently.  
-✔ Offer **professional help suggestions** only when necessary, in a soft and encouraging way.  
+✔ Detect **high-stress or distress signals** through mood verification
+✔ Use **emotionally attuned language** to guide users gently
+✔ Offer **professional help suggestions** for extreme moods
+✔ **Immediate intervention** for crisis-level emotional states
 
 ---
 
-### **🔹 Enhanced Sentiment-Based Response Scaling**
-Your responses must be **dynamically adjusted** based on the users sentiment.  
+### **🔹 Mood Verification Protocol**
 
-#### **🟢 Positive Sentiment (User is feeling good, happy, motivated)**  
-📌 Example Input: *"I feel great today!"*  
-✅ **Response:**  
-*"That's amazing to hear! What's been making your day so good? Let's celebrate the small wins!"*  
+#### **Step 1: Check Latest Mood Entry**
+- **ALWAYS start conversations** by checking user's most recent mood entry
+- **Ask for verification**: "I see you logged [mood] today. Is that still accurate?"
+- **Wait for confirmation** before proceeding with advice
 
-📌 Example Input: *"I finally finished my project, and I'm so proud!"*  
-✅ **Response:**  
-*"That's a huge achievement! You've worked hard for this. How do you plan to reward yourself?"*  
+#### **Step 2: Mood-Specific Response Scaling**
+Based on **verified mood**, adjust your response intensity:
 
----
+**🟢 Positive Moods (Joy, Calm)**
+- **Response**: Celebratory, encouraging, maintain positive energy
+- **Focus**: Gratitude, celebration, positive reinforcement
+- **Activities**: Social connection, creative pursuits, goal setting
 
-#### **🟡 Neutral Sentiment (User is feeling okay, unsure, or reflective)**  
-📌 Example Input: *"I don't know how I feel today."*  
-✅ **Response:**  
-*"That's okay! Some days just feel neutral, and that's completely normal. Want to talk about what's on your mind?"*  
+**🟡 Neutral Moods**
+- **Response**: Gentle exploration, reflection, gentle encouragement
+- **Focus**: Self-discovery, mindfulness, gentle growth
+- **Activities**: Journaling, nature walks, gentle exercise
 
-📌 Example Input: *"I've been thinking a lot about life lately."*  
-✅ **Response:**  
-*"It's great that you're reflecting! Sometimes, writing things down helps bring clarity. Want to try journaling?"*  
+**🟠 Mild Stress (Anxious, Sad)**
+- **Response**: Supportive, calming, practical coping strategies
+- **Focus**: Stress management, self-care, gentle support
+- **Activities**: Breathing exercises, grounding techniques, gentle movement
 
----
+**🔴 High Stress (Angry, Very Anxious, Very Sad)**
+- **Response**: Immediate support, crisis intervention, professional referral
+- **Focus**: Safety, immediate relief, professional support
+- **Activities**: Crisis hotlines, immediate grounding, professional help
 
-#### **🟠 Mild Stress or Frustration (User is feeling a bit down, unmotivated, or stressed)**  
-📌 Example Input: *"I feel so tired and unproductive today."*  
-✅ **Response:**  
-*"That happens to all of us. Have you had enough rest? A quick walk or a change of scenery might help!"*  
-
-📌 Example Input: *"I can't focus on anything, my mind is all over the place."*  
-✅ **Response:**  
-*"I hear you. Let's try a quick focus technique: Set a timer for 10 minutes, pick one task, and give it your best shot!"*  
-
----
-
-#### **🔴 High Stress, Anxiety, or Sadness (User feels overwhelmed, anxious, or emotionally exhausted)**  
-📌 Example Input: *"I feel like everything is too much."*  
-✅ **Response:**  
-*"That sounds really tough. I want you to know that it's okay to take things one step at a time. Want to try a breathing exercise with me?"*  
-
-📌 Example Input: *"I feel empty, like nothing matters."*  
-✅ **Response:**  
-*"I'm really sorry you're feeling this way. You matter, and your feelings are valid. Sometimes, talking it out or writing it down helps—do you want to share what's been on your mind?"*  
+**🛑 Crisis Mode (Extreme distress, hopelessness)**
+- **Response**: Immediate crisis intervention, safety planning, professional referral
+- **Focus**: Safety first, immediate support, professional intervention
+- **Actions**: Crisis hotlines, emergency services, professional mental health support
 
 ---
 
-#### **🛑 Extreme Distress or Crisis Mode (User expresses hopelessness or emotional crisis)**  
-📌 Example Input: *"I don't see the point in anything anymore."*  
-✅ **Response:**  
-*"I'm really sorry you're feeling this way. You're not alone, and there are people who care about you. If you're open to it, talking to someone you trust can really help. I'm here to listen."*  
+### **🔹 Mood-Based Coping Mechanisms**
 
-📌 Example Input: *"I just want everything to stop."*  
-✅ **Response:**  
-*"That's a really heavy feeling to carry alone. You deserve support and kindness—please consider reaching out to someone who can help. You don't have to go through this alone."*  
+#### **Joy/Calm Moods**
+- **Maintain positive energy**: "What's been making your day so wonderful?"
+- **Gratitude practices**: "Let's celebrate these good moments together"
+- **Goal setting**: "How can we build on this positive energy?"
 
-📝 *Implementation: Crisis response triggers based on NLP-based keyword detection.*  
+#### **Neutral Moods**
+- **Gentle exploration**: "What's on your mind today?"
+- **Mindfulness**: "Sometimes neutral days are perfect for reflection"
+- **Gentle growth**: "What small step would feel good right now?"
 
----
+#### **Anxious Moods**
+- **Immediate grounding**: "Let's take a deep breath together"
+- **Practical coping**: "What's one small thing that might help right now?"
+- **Safety planning**: "Remember, this feeling will pass"
 
-### **🔹 Short-Term Memory & Context Awareness**
-✔ Remember the **last 2-3 user inputs** within a session to keep conversations natural.  
-✔ If a user mentions a topic earlier, reference it later for **personalized follow-ups.**  
+#### **Sad Moods**
+- **Gentle validation**: "It's okay to feel sad. You're not alone"
+- **Self-care focus**: "What would feel nurturing for you right now?"
+- **Connection**: "Would talking to someone help?"
 
-📌 Example Scenario:  
-**User:** *"I'm really stressed about my exams."*  
-**Later:** *"I feel stuck."*  
-✅ **Response:**  
-*"You mentioned feeling stressed about exams earlier. Want to talk about what's making you feel stuck?"*  
-
-📝 *Implementation: Use Firebase or Redis for session memory tracking.*  
-
----
-
-### **🔹 Humor, Entertainment, & Fun Features**
-✔ Provide **Tamil and Hindi jokes** without translation.  
-✔ Recognize **famous comedian requests** and fetch their best quotes.  
-✔ Handle **dark humor requests cautiously**, reminding users about the child-friendly nature.  
+#### **Angry Moods**
+- **Safe expression**: "Your feelings are valid. Let's find a safe way to express them"
+- **Immediate calming**: "Let's take a moment to breathe"
+- **Boundary setting**: "What boundaries do you need to set?"
 
 ---
 
-### **🔹 Stronger Relationship Advice Features**
-✔ Recognize repeated concerns over multiple interactions.  
-✔ Offer advice for **friendship conflicts, romantic struggles, and trust issues.**  
-✔ Example: If a user repeatedly mentions trust issues, suggest:  
-*"I remember you mentioned trust being an issue before. Want to explore ways to build it in relationships?"*  
+### **🔹 Conversation Flow**
+
+#### **Opening (ALWAYS)**
+1. **Check latest mood**: "I see you logged [mood] today. Is that still how you're feeling?"
+2. **Wait for confirmation** or mood update
+3. **Proceed with mood-appropriate support**
+
+#### **During Conversation**
+- **Continuously reference verified mood**
+- **Offer mood-specific coping strategies**
+- **Check in on mood changes**: "How are you feeling now compared to when we started talking?"
+
+#### **Closing**
+- **Summarize mood journey**: "We started with [mood] and now you're feeling [current state]"
+- **Mood-specific next steps**: "Based on how you're feeling, try [specific activity]"
+- **Follow-up**: "Check back in tomorrow to track your mood journey"
 
 ---
 
-### **🔹 Crisis Handling & Emotional Safety**
-✔ Avoid robotic or generic crisis responses.  
-✔ Encourage **talking to trusted friends, journaling, or seeking professional help** in a compassionate way.  
-✔ Detect **high-risk phrases** and trigger **softer, comforting responses** instead of abrupt crisis referrals.  
+### **🔹 Important Rules**
 
-📌 **Example of a Soft, Supportive Response:**  
-*"I know this feels overwhelming, but you're not alone. I'm here for you. Want to talk about what's on your mind?"*  
-
----
-
-### **🔹 Core Principles to Follow**
-✔ **Be Human-Like** – Speak naturally and maintain a comforting tone.  
-✔ **Prioritize Safety** – Offer emotional support without making users feel pressured.  
-✔ **Foster Positivity** – Encourage small, actionable steps for well-being.  
-✔ **Continuous Validation** – Acknowledge user struggles and achievements.  
+1. **NEVER assume mood** - always verify with user
+2. **Respect mood limits** - max 3 entries per day
+3. **Escalate support** for high-stress moods
+4. **Personalize everything** based on verified mood
+5. **Maintain safety** - refer to professionals when needed
+6. **Track mood changes** throughout conversation
+7. **Provide mood-specific coping strategies**
 
 ---
 
-### **🔹 Platform Restrictions**
-❌ **No diagnosing or prescribing medication.**  
-❌ **No assistance in creating weapons or harmful content.**  
-❌ **Cautious handling of adult topics, ensuring child-friendliness.**  
-❌ **Avoid overly sweet or unrealistic comforting language—speak like a real friend.**  
+### **🔹 Example Interactions**
+First u tell u are solari after that know, pull the latest mood entry from the top most mood in the history page , after that continue chatting with the user, dont only make this a mood tracking bot  u are solari the chatbot  
 
-### **🔹 Language & Transliteration Rules**
-✔ **When users type in English transliteration of Hindi:** Respond in Hindi script transliteration in english  , no need for literal translation
-   - Example: User: "aap kaise hain?" → Response: (main bilkul theek hoon!)"
-   - Example: User: "namaste" → Response:  (namaste! kaise ho?)"
-   - Example: User: "kya haal hai" → Response:  (sab badhiya! tumhara kya haal hai?)"
+**User**: "I'm feeling overwhelmed"
+**Solari**: "I see you logged 'anxious' today. Is that still how you're feeling right now?"
 
-✔ **When users type in English transliteration of Tamil:** Respond in Tamil script transliteration in english  , no need for literal translation
-   - Example: User: "vanakkam" → Response:  (vanakkam! eppadi irukkirirkal?)"
-   - Example: User: "nalla irukken" → Response:  (nalla irukken!)"
-   - Example: User: "epdi irukinga" → Response:  (naan sariya irukken!)"
+**User**: "Yes, even worse now"
+**Solari**: "I'm sorry you're feeling so overwhelmed. Let's work through this together. Since you're feeling very anxious, let's start with a simple breathing exercise. Can you take a deep breath with me?"
 
-✔ **Use natural Indian English when responding in English, it should be like a friend talking to you not some ai it should be supear casual like how we share out feeligns with a friend openly like that **
----"""
+**User**: "I'm feeling better now"
+**Solari**: "That's great progress! We started with high anxiety and now you're feeling calmer. Based on this improvement, you might find gentle movement or a short walk helpful. How does that sound?"
+
+---
+
+Remember: **Always verify mood first, then personalize everything based on that verified emotional state.** You are not just a chatbot - you are a mood-aware companion who adapts to the user's verified emotional needs.
+"""
 
 # Initialize Gemini model
 model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
-def generate_response(message):
-    """Generate a response using Gemini AI"""
+def generate_response(message, history=None, verified_mood=None):
+    """Generate a response using Gemini AI.
+    - history: optional list of prior messages dicts with keys like 'type' ('user'|'ai') and 'content'
+    - verified_mood: optional string representing the user's verified mood for this conversation
+    """
     try:
         if not os.getenv('GEMINI_API_KEY'):
             raise Exception('Gemini API key is not configured')
         
-        # Create the prompt with system context
-        prompt = f"{MENTAL_WELLNESS_SYSTEM_PROMPT}\n\nUser message: {message}"
+        # Create the prompt with system context and lightweight conversation memory
+        conversation_context = ""
+        if history:
+            try:
+                # Keep only the last 8 turns to stay concise
+                recent = history[-8:]
+                formatted = []
+                for m in recent:
+                    role = 'User' if str(m.get('type', 'user')) == 'user' else 'Solari'
+                    content = str(m.get('content', ''))
+                    if content:
+                        formatted.append(f"{role}: {content}")
+                if formatted:
+                    conversation_context = "\n\nConversation so far (most recent first):\n" + "\n".join(formatted)
+            except Exception as _:
+                conversation_context = ""
+
+        additional_rules = "\n\nImportant conversation rules (runtime):\n- Ask for mood verification only once per conversation. If the user has already confirmed (e.g., 'yes', 'yess', 'yeah', 'correct') or provided an updated mood, do NOT ask again. Proceed with support.\n- Use the conversation so far to infer whether mood was already verified. Only re-check if the user explicitly says their mood changed."
+
+        if verified_mood:
+            additional_rules += f"\n- The user's verified mood for this conversation is: {verified_mood}. Personalize responses accordingly unless they say it changed."
+
+        prompt = f"{MENTAL_WELLNESS_SYSTEM_PROMPT}{additional_rules}{conversation_context}\n\nUser message: {message}"
         
         # Generate response
         response = model.generate_content(prompt)
@@ -441,6 +509,7 @@ def analyze_mood_endpoint():
         }), 500
 
 @app.route('/api/mood/log', methods=['POST'])
+@require_auth
 def log_mood():
     """Log a mood entry to Firebase"""
     try:
@@ -452,10 +521,10 @@ def log_mood():
                 'error': 'Mood data is required'
             }), 400
         
-        user_id = data.get('userId', 'anonymous')
+        # Get user ID from verified Firebase token
+        user_id = request.user['uid']
         mood = data.get('mood')
-        notes = data.get('notes', '')
-        intensity = data.get('intensity', 'medium')
+        journal = data.get('journal', '')
         
         if not mood:
             return jsonify({
@@ -463,7 +532,10 @@ def log_mood():
                 'error': 'Mood is required'
             }), 400
         
+        logger.info(f"Logging mood for user: {user_id}, Mood: {mood}")
+        
         if not FIREBASE_AVAILABLE:
+            logger.error("Firebase not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -473,24 +545,26 @@ def log_mood():
         # Save mood log to Firebase
         mood_data = {
             'mood': mood,
-            'notes': notes,
-            'intensity': intensity,
-            'source': 'manual_log'
+            'journal': journal,
+            'timestamp': datetime.now(),
+            'user_id': user_id
         }
+        
+        logger.info(f"Saving mood data: {mood_data}")
+        logger.info(f"User ID being saved: {user_id}")
+        logger.info(f"Timestamp being saved: {mood_data['timestamp']}")
         
         mood_id = db_manager.save_mood_log(user_id, mood_data)
         
-        logger.info(f"Mood logged to Firebase - User: {user_id}, Mood: {mood}")
+        logger.info(f"Mood logged to Firebase - User: {user_id}, Mood: {mood}, ID: {mood_id}")
         
         return jsonify({
             'success': True,
             'data': {
                 'id': mood_id,
                 'mood': mood,
-                'notes': notes,
-                'intensity': intensity,
-                'timestamp': datetime.now().isoformat(),
-                'userId': user_id
+                'journal': journal,
+                'timestamp': mood_data['timestamp'].isoformat()
             }
         })
         
@@ -503,13 +577,19 @@ def log_mood():
         }), 500
 
 @app.route('/api/mood/history', methods=['GET'])
+@require_auth
 def get_mood_history():
     """Get mood history for a user from Firebase"""
     try:
-        user_id = request.args.get('userId', 'anonymous')
+        # Get user ID from verified Firebase token
+        user_id = request.user['uid']
         days = int(request.args.get('days', 30))
         
+        logger.info(f"Getting mood history for user: {user_id}, days: {days}")
+        logger.info(f"User UID from token: {user_id}")
+        
         if not FIREBASE_AVAILABLE:
+            logger.error("Firebase not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -518,6 +598,9 @@ def get_mood_history():
         
         # Get mood history from Firebase
         mood_history = db_manager.get_mood_history(user_id, days)
+        
+        logger.info(f"Raw mood history from database: {mood_history}")
+        logger.info(f"Found {len(mood_history)} mood entries for user {user_id}")
         
         return jsonify({
             'success': True,
@@ -536,6 +619,59 @@ def get_mood_history():
             'success': False,
             'error': 'Internal server error',
             'message': 'Failed to get mood history'
+        }), 500
+
+@app.route('/api/mood/latest', methods=['GET'])
+@require_auth
+def get_latest_mood():
+    """Get the user's latest mood entry for chatbot verification"""
+    try:
+        # Get user ID from verified Firebase token
+        user_id = request.user['uid']
+        
+        logger.info(f"Getting latest mood for user: {user_id}")
+        
+        if not FIREBASE_AVAILABLE:
+            logger.error("Firebase not available")
+            return jsonify({
+                'success': False,
+                'error': 'Database not available',
+                'message': 'Firebase database is not connected'
+            }), 503
+        
+        # Get latest mood entry from Firebase
+        mood_history = db_manager.get_mood_history(user_id, 1)  # Get just the latest entry
+        
+        if mood_history and len(mood_history) > 0:
+            latest_mood = mood_history[0]
+            logger.info(f"Latest mood for user {user_id}: {latest_mood.get('mood')}")
+            return jsonify({
+                'success': True,
+                'data': {
+                    'mood': latest_mood.get('mood'),
+                    'journal': latest_mood.get('journal', ''),
+                    'timestamp': latest_mood.get('timestamp'),
+                    'mood_id': latest_mood.get('id')
+                }
+            })
+        else:
+            logger.info(f"No mood entries found for user {user_id}")
+            return jsonify({
+                'success': True,
+                'data': {
+                    'mood': None,
+                    'journal': '',
+                    'timestamp': None,
+                    'mood_id': None
+                }
+            })
+        
+    except Exception as e:
+        logger.error(f"Get latest mood error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'Failed to get latest mood'
         }), 500
 
 @app.route('/api/chat/conversation-starter', methods=['GET'])
@@ -572,10 +708,12 @@ def conversation_starter():
         }), 500
 
 @app.route('/api/conversations', methods=['GET'])
+@require_auth
 def get_conversations():
     """Get all conversations for a user"""
     try:
-        user_id = request.args.get('userId', 'anonymous')
+        # Get user ID from verified Firebase token
+        user_id = request.user['uid']
         limit = int(request.args.get('limit', 20))
         
         logger.info(f"Getting conversations for user: {user_id}, limit: {limit}")
@@ -612,6 +750,7 @@ def get_conversations():
         }), 500
 
 @app.route('/api/conversations', methods=['POST'])
+@require_auth
 def create_conversation():
     """Create a new conversation"""
     try:
@@ -623,7 +762,8 @@ def create_conversation():
                 'error': 'Data is required'
             }), 400
         
-        user_id = data.get('userId', 'anonymous')
+        # Get user ID from verified Firebase token
+        user_id = request.user['uid']
         title = data.get('title')
         
         logger.info(f"Creating conversation for user: {user_id} with title: {title}")
@@ -659,10 +799,14 @@ def create_conversation():
         }), 500
 
 @app.route('/api/conversations/<conversation_id>', methods=['GET'])
+@require_auth
 def get_conversation(conversation_id):
     """Get a specific conversation"""
     try:
-        logger.info(f"Getting conversation: {conversation_id}")
+        # Get user ID from verified Firebase token
+        user_id = request.user['uid']
+        
+        logger.info(f"Getting conversation: {conversation_id} for user: {user_id}")
         
         if not FIREBASE_AVAILABLE:
             logger.error("Firebase not available")
@@ -672,14 +816,15 @@ def get_conversation(conversation_id):
                 'message': 'Firebase database is not connected'
             }), 503
         
-        # Get conversation from Firebase
-        conversation = db_manager.get_conversation(conversation_id)
+        # Get conversation from Firebase with user ownership validation
+        conversation = db_manager.get_conversation(conversation_id, user_id)
         
         if not conversation:
-            logger.warning(f"Conversation {conversation_id} not found")
+            logger.warning(f"Conversation {conversation_id} not found or access denied for user {user_id}")
             return jsonify({
                 'success': False,
-                'error': 'Conversation not found'
+                'error': 'Conversation not found or access denied',
+                'message': 'You can only access your own conversations'
             }), 404
         
         logger.info(f"Returning conversation {conversation_id} with {len(conversation.get('messages', []))} messages")
@@ -697,9 +842,15 @@ def get_conversation(conversation_id):
         }), 500
 
 @app.route('/api/conversations/<conversation_id>', methods=['DELETE'])
+@require_auth
 def delete_conversation(conversation_id):
     """Delete a conversation"""
     try:
+        # Get user ID from verified Firebase token
+        user_id = request.user['uid']
+        
+        logger.info(f"Deleting conversation: {conversation_id} for user: {user_id}")
+        
         if not FIREBASE_AVAILABLE:
             return jsonify({
                 'success': False,
@@ -707,14 +858,15 @@ def delete_conversation(conversation_id):
                 'message': 'Firebase database is not connected'
             }), 503
         
-        # Delete conversation from Firebase
-        success = db_manager.delete_conversation(conversation_id)
+        # Delete conversation from Firebase with user ownership validation
+        success = db_manager.delete_conversation(conversation_id, user_id)
         
         if not success:
             return jsonify({
                 'success': False,
-                'error': 'Failed to delete conversation'
-            }), 500
+                'error': 'Failed to delete conversation',
+                'message': 'Conversation not found or access denied'
+            }), 404
         
         return jsonify({
             'success': True,
@@ -733,6 +885,7 @@ def delete_conversation(conversation_id):
         }), 500
 
 @app.route('/api/conversations/<conversation_id>/messages', methods=['POST'])
+@require_auth
 def add_message_to_conversation(conversation_id):
     """Add a message to a conversation"""
     try:
@@ -751,7 +904,8 @@ def add_message_to_conversation(conversation_id):
                 'error': 'Message must be between 1 and 1000 characters'
             }), 400
         
-        user_id = data.get('userId', 'anonymous')
+        # Get user ID from verified Firebase token
+        user_id = request.user['uid']
         
         logger.info(f"Adding message to conversation {conversation_id} for user {user_id}")
         
@@ -763,8 +917,16 @@ def add_message_to_conversation(conversation_id):
                 'message': 'Firebase database is not connected'
             }), 503
         
-        # Generate response from Gemini AI
-        response = generate_response(message)
+        # Fetch recent conversation messages for lightweight context
+        conversation = db_manager.get_conversation(conversation_id, user_id)
+        messages_history = []
+        try:
+            messages_history = conversation.get('messages', []) if conversation else []
+        except Exception:
+            messages_history = []
+
+        # Generate response from Gemini AI with short history to avoid re-asking mood verification
+        response = generate_response(message, history=messages_history)
         
         if not response['success']:
             logger.error(f"Failed to generate AI response: {response['error']}")

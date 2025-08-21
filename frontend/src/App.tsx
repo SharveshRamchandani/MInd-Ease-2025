@@ -64,17 +64,17 @@ const AppContent = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
-      <ChatProvider>
+      <AuthProvider>
         <TooltipProvider>
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <AuthProvider>
+            <ChatProvider>
               <AppContent />
-            </AuthProvider>
+            </ChatProvider>
           </BrowserRouter>
         </TooltipProvider>
-      </ChatProvider>
+      </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );

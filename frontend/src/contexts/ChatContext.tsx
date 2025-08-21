@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { stripMarkdown } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface Message {
   id: string;
@@ -54,6 +56,32 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const { toast } = useToast();
+  const { currentUser } = useAuth();
+  const navigate = useNavigate();
+
+  // Get the current user ID, fallback to 'anonymous' if not authenticated
+  const getCurrentUserId = () => {
+    return currentUser?.uid || 'anonymous';
+  };
+
+  // Check if user is authenticated
+  const isAuthenticated = () => {
+    return !!currentUser?.uid;
+  };
+
+  // Redirect to login if not authenticated
+  const requireAuth = () => {
+    if (!isAuthenticated()) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to access your conversations.",
+        variant: "destructive",
+      });
+      navigate('/login');
+      return false;
+    }
+    return true;
+  };
 
   // Initialize with welcome message only if no conversation is selected
   useEffect(() => {
@@ -80,17 +108,21 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const loadConversations = async () => {
     if (isLoadingConversations) return; // Prevent multiple simultaneous loads
     
+    // Check authentication
+    if (!requireAuth()) return;
+    
     setIsLoadingConversations(true);
     try {
       const { http, apiBase } = await import('@/lib/api');
-      const data = await http<any>(`/api/conversations?userId=anonymous`);
+      const data = await http<any>(`/api/conversations`);
       
       if (data.success) {
         const loaded = data.data.conversations as Conversation[];
         setConversations(loaded);
         
         // Try to restore the last selected conversation
-        const lastId = localStorage.getItem('chat:lastConversationId');
+        const userId = getCurrentUserId();
+        const lastId = localStorage.getItem(`chat:lastConversationId:${userId}`);
         if (lastId && loaded.some(c => c.id === lastId)) {
           await selectConversation(lastId);
         } else if (loaded.length > 0) {
@@ -101,8 +133,17 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       } else {
         console.error('Failed to load conversations:', data.error);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading conversations:', error);
+      if (error.message?.includes('401')) {
+        // Authentication failed, redirect to login
+        toast({
+          title: "Session expired",
+          description: "Please log in again to continue.",
+          variant: "destructive",
+        });
+        navigate('/login');
+      }
     } finally {
       setIsLoadingConversations(false);
     }
@@ -111,13 +152,15 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const createNewConversation = async () => {
     if (isCreatingConversation) return; // Prevent multiple simultaneous creations
     
+    // Check authentication
+    if (!requireAuth()) return;
+    
     setIsCreatingConversation(true);
     try {
       const { http } = await import('@/lib/api');
       const data = await http<any>(`/api/conversations`, {
         method: 'POST',
         body: {
-          userId: 'anonymous',
           title: `New Chat ${new Date().toLocaleTimeString()}`
         }
       });
@@ -125,7 +168,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       if (data.success) {
         const newConversationId = data.data.conversation_id;
         setCurrentConversationId(newConversationId);
-        localStorage.setItem('chat:lastConversationId', newConversationId);
+        const userId = getCurrentUserId();
+        localStorage.setItem(`chat:lastConversationId:${userId}`, newConversationId);
         
         // Clear messages and let the useEffect handle the welcome message
         setCurrentMessages([]);
@@ -143,13 +187,22 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
           description: "You can start chatting now!",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating conversation:', error);
-      toast({
-        title: "Error creating conversation",
-        description: "Please try again later.",
-        variant: "destructive",
-      });
+      if (error.message?.includes('401')) {
+        toast({
+          title: "Session expired",
+          description: "Please log in again to continue.",
+          variant: "destructive",
+        });
+        navigate('/login');
+      } else {
+        toast({
+          title: "Error creating conversation",
+          description: "Please try again later.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsCreatingConversation(false);
     }
@@ -165,7 +218,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       
       if (data.success) {
         setCurrentConversationId(conversationId);
-        localStorage.setItem('chat:lastConversationId', conversationId);
+        const userId = getCurrentUserId();
+        localStorage.setItem(`chat:lastConversationId:${userId}`, conversationId);
         const messages = data.data.messages || [];
         
         if (messages.length === 0) {
@@ -188,13 +242,22 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading conversation:', error);
-      toast({
-        title: "Error loading conversation",
-        description: "Please try again later.",
-        variant: "destructive",
-      });
+      if (error.message?.includes('401')) {
+        toast({
+          title: "Session expired",
+          description: "Please log in again to continue.",
+          variant: "destructive",
+        });
+        navigate('/login');
+      } else {
+        toast({
+          title: "Error loading conversation",
+          description: "Please try again later.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -210,7 +273,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         // If this was the current conversation, clear it
         if (currentConversationId === conversationId) {
           setCurrentConversationId(null);
-          localStorage.removeItem('chat:lastConversationId');
+          const userId = getCurrentUserId();
+          localStorage.removeItem(`chat:lastConversationId:${userId}`);
           setCurrentMessages([]);
         }
         
@@ -219,13 +283,22 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
           description: "The conversation has been removed.",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting conversation:', error);
-      toast({
-        title: "Error deleting conversation",
-        description: "Please try again later.",
-        variant: "destructive",
-      });
+      if (error.message?.includes('401')) {
+        toast({
+          title: "Session expired",
+          description: "Please log in again to continue.",
+          variant: "destructive",
+        });
+        navigate('/login');
+      } else {
+        toast({
+          title: "Error deleting conversation",
+          description: "Please try again later.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -252,9 +325,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${await currentUser?.getIdToken()}`
           },
           body: JSON.stringify({
-            userId: 'anonymous',
             title: `New Chat ${new Date().toLocaleTimeString()}`
           }),
         });
@@ -264,7 +337,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         if (data.success) {
           conversationId = data.data.conversation_id;
           setCurrentConversationId(conversationId);
-          localStorage.setItem('chat:lastConversationId', conversationId);
+          const userId = getCurrentUserId();
+          localStorage.setItem(`chat:lastConversationId:${userId}`, conversationId);
           
           // Clear messages and let the useEffect handle the welcome message
           setCurrentMessages([]);
@@ -292,8 +366,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       const data = await http<any>(`/api/conversations/${conversationId}/messages`, {
         method: 'POST',
         body: {
-          message,
-          userId: 'anonymous'
+          message
         },
       });
       
@@ -310,8 +383,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         throw new Error(data.error || 'Failed to get response from AI');
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
+      if (error.message?.includes('401')) {
+        return "I'm sorry, your session has expired. Please log in again to continue chatting.";
+      }
       return "I'm sorry, I'm having trouble connecting to my AI brain right now. Please check if the backend server is running and try again.";
     } finally {
       setIsLoading(false);

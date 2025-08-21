@@ -127,14 +127,20 @@ class DatabaseManager:
             logger.error(f"Failed to get conversations for user {user_id}: {str(e)}")
             return []
 
-    def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
-        """Get a specific conversation by ID"""
+    def get_conversation(self, conversation_id: str, user_id: str = None) -> Optional[Dict[str, Any]]:
+        """Get a specific conversation by ID, with optional user ownership validation"""
         try:
-            logger.info(f"Getting conversation: {conversation_id}")
+            logger.info(f"Getting conversation: {conversation_id} for user: {user_id}")
             doc = self.db.collection(self.collections['conversations']).document(conversation_id).get()
             if doc.exists:
                 conversation_data = doc.to_dict()
                 conversation_data['id'] = doc.id
+                
+                # If user_id is provided, validate ownership
+                if user_id and conversation_data.get('user_id') != user_id:
+                    logger.warning(f"User {user_id} attempted to access conversation {conversation_id} owned by {conversation_data.get('user_id')}")
+                    return None
+                
                 logger.info(f"Found conversation: {conversation_id} with {len(conversation_data.get('messages', []))} messages")
                 return conversation_data
             else:
@@ -144,9 +150,16 @@ class DatabaseManager:
             logger.error(f"Failed to get conversation {conversation_id}: {str(e)}")
             return None
 
-    def delete_conversation(self, conversation_id: str) -> bool:
-        """Delete a conversation"""
+    def delete_conversation(self, conversation_id: str, user_id: str = None) -> bool:
+        """Delete a conversation, with optional user ownership validation"""
         try:
+            # If user_id is provided, validate ownership before deletion
+            if user_id:
+                conversation = self.get_conversation(conversation_id, user_id)
+                if not conversation:
+                    logger.warning(f"User {user_id} attempted to delete conversation {conversation_id} without ownership")
+                    return False
+            
             self.db.collection(self.collections['conversations']).document(conversation_id).delete()
             logger.info(f"Conversation {conversation_id} deleted")
             return True
@@ -154,6 +167,17 @@ class DatabaseManager:
             logger.error(f"Failed to delete conversation {conversation_id}: {str(e)}")
             return False
 
+    def check_conversation_ownership(self, conversation_id: str, user_id: str) -> bool:
+        """Check if a user owns a specific conversation"""
+        try:
+            conversation = self.get_conversation(conversation_id)
+            if conversation and conversation.get('user_id') == user_id:
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Failed to check conversation ownership: {str(e)}")
+            return False
+    
     def save_chat_message(self, user_id: str, session_id: str, message_data: Dict[str, Any]) -> str:
         """Save a chat message to the database (legacy method)"""
         try:
@@ -209,14 +233,12 @@ class DatabaseManager:
     def get_mood_history(self, user_id: str, days: int = 30) -> List[Dict[str, Any]]:
         """Get mood history for a user"""
         try:
-            from datetime import timedelta
+            logger.info(f"Getting mood history for user {user_id}, days: {days}")
             
-            start_date = datetime.now() - timedelta(days=days)
-            
+            # Simple query - just get all mood logs for the user
+            # We'll filter by days in Python instead of Firestore
             query = self.db.collection(self.collections['mood_logs'])\
-                .where('user_id', '==', user_id)\
-                .where('timestamp', '>=', start_date)\
-                .order_by('timestamp', direction=firestore.Query.DESCENDING)
+                .where('user_id', '==', user_id)
             
             docs = query.stream()
             mood_logs = []
@@ -225,8 +247,50 @@ class DatabaseManager:
                 mood_data = doc.to_dict()
                 mood_data['id'] = doc.id
                 mood_logs.append(mood_data)
+                logger.info(f"Found mood entry: {mood_data.get('mood')} at {mood_data.get('timestamp')}")
             
+            # Filter by days in Python (more reliable)
+            if days > 0:
+                from datetime import timedelta
+                
+                # Get current time (simple approach)
+                now = datetime.now()
+                cutoff_date = now - timedelta(days=days)
+                
+                logger.info(f"Filtering entries after: {cutoff_date}")
+                
+                filtered_logs = []
+                for log in mood_logs:
+                    timestamp = log.get('timestamp')
+                    if timestamp:
+                        try:
+                            # Simple comparison - if it fails, include the entry
+                            if timestamp >= cutoff_date:
+                                filtered_logs.append(log)
+                                logger.info(f"Entry {log.get('mood')} at {timestamp} is within {days} days")
+                            else:
+                                logger.info(f"Entry {log.get('mood')} at {timestamp} is too old")
+                        except Exception as compare_error:
+                            # If comparison fails, include the entry and log the error
+                            logger.warning(f"Could not compare timestamp {timestamp}: {compare_error}. Including entry.")
+                            filtered_logs.append(log)
+                    else:
+                        # If no timestamp, include it (shouldn't happen but safety)
+                        filtered_logs.append(log)
+                        logger.info(f"Entry {log.get('mood')} has no timestamp, including it")
+                
+                mood_logs = filtered_logs
+                logger.info(f"After filtering by {days} days: {len(mood_logs)} entries")
+            
+            # Sort by timestamp descending (newest first)
+            try:
+                mood_logs.sort(key=lambda x: x.get('timestamp', datetime.min), reverse=True)
+            except Exception as sort_error:
+                logger.warning(f"Could not sort by timestamp: {sort_error}. Keeping original order.")
+            
+            logger.info(f"Total mood logs found for user {user_id}: {len(mood_logs)}")
             return mood_logs
+            
         except Exception as e:
             logger.error(f"Failed to get mood history for user {user_id}: {str(e)}")
             return []

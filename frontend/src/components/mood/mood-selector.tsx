@@ -1,23 +1,20 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface MoodOption {
   emoji: string;
   label: string;
   value: string;
-  color: string;
 }
 
 const moodOptions: MoodOption[] = [
-  { emoji: "😄", label: "Joyful", value: "joy", color: "emotion-joy" },
-  { emoji: "😊", label: "Content", value: "calm", color: "emotion-calm" },
-  { emoji: "😐", label: "Neutral", value: "neutral", color: "emotion-neutral" },
-  { emoji: "😔", label: "Sad", value: "sad", color: "emotion-sad" },
-  { emoji: "😡", label: "Angry", value: "angry", color: "emotion-angry" },
-  { emoji: "😰", label: "Anxious", value: "anxious", color: "emotion-anxious" },
+  { emoji: "😄", label: "Joyful", value: "joy" },
+  { emoji: "😊", label: "Content", value: "calm" },
+  { emoji: "😐", label: "Neutral", value: "neutral" },
+  { emoji: "😔", label: "Sad", value: "sad" },
+  { emoji: "😡", label: "Angry", value: "angry" },
+  { emoji: "😰", label: "Anxious", value: "anxious" },
 ];
 
 interface MoodSelectorProps {
@@ -28,73 +25,89 @@ interface MoodSelectorProps {
 export const MoodSelector = ({ onMoodSubmit, isLoading = false }: MoodSelectorProps) => {
   const [selectedMood, setSelectedMood] = useState<string>("");
   const [journalEntry, setJournalEntry] = useState<string>("");
+  const { currentUser } = useAuth();
+  const { toast } = useToast();
 
-  const handleSubmit = () => {
-    if (selectedMood) {
-      onMoodSubmit(selectedMood, journalEntry);
-      setSelectedMood("");
-      setJournalEntry("");
+  const handleSubmit = async () => {
+    if (!currentUser) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to log your mood.",
+        variant: "destructive",
+      });
+      return;
     }
+
+    if (!selectedMood) {
+      toast({
+        title: "Mood selection required",
+        description: "Please select a mood before submitting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Call the parent component's submit handler
+    onMoodSubmit(selectedMood, journalEntry);
+    
+    // Reset form
+    setSelectedMood("");
+    setJournalEntry("");
   };
 
-  const selectedMoodOption = moodOptions.find(m => m.value === selectedMood);
-
   return (
-    <Card className="p-6 shadow-card transition-gentle">
+    <div className="border border-border rounded-lg p-6">
       <div className="space-y-6">
-        <div className="text-center">
-          <h2 className="text-2xl font-semibold mb-2">How are you feeling today?</h2>
-          <p className="text-muted-foreground">Select your current mood</p>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
-          {moodOptions.map((mood) => (
-            <Button
-              key={mood.value}
-              variant={selectedMood === mood.value ? "default" : "outline"}
-              className={cn(
-                "flex flex-col gap-2 h-auto py-4 transition-bounce hover:scale-105",
-                selectedMood === mood.value && `bg-${mood.color} hover:bg-${mood.color}/90`
-              )}
-              onClick={() => setSelectedMood(mood.value)}
-            >
-              <span className="text-3xl">{mood.emoji}</span>
-              <span className="text-sm font-medium">{mood.label}</span>
-            </Button>
-          ))}
-        </div>
-
-        {selectedMood && (
-          <div className="space-y-4 animate-gentle-bounce">
-            <div className="text-center">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
-                <span className="text-2xl">{selectedMoodOption?.emoji}</span>
-                <span className="font-medium">Feeling {selectedMoodOption?.label}</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Journal Entry (optional)
-              </label>
-              <Textarea
-                placeholder="Share what's on your mind today... How are you feeling? What happened today?"
-                value={journalEntry}
-                onChange={(e) => setJournalEntry(e.target.value)}
-                className="min-h-[100px] resize-none"
-              />
-            </div>
-
-            <Button
-              onClick={handleSubmit}
-              disabled={isLoading}
-              className="w-full bg-gradient-primary hover:opacity-90 transition-gentle"
-            >
-              {isLoading ? "Saving..." : "Save Mood Entry"}
-            </Button>
+        {/* Mood Selection */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold mb-4">How are you feeling today?</h3>
+          <p className="text-sm text-muted-foreground mb-4">Select your current mood</p>
+          
+          <div className="grid grid-cols-2 gap-4">
+            {moodOptions.map((mood) => (
+              <button
+                key={mood.value}
+                onClick={() => setSelectedMood(mood.value)}
+                className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                  selectedMood === mood.value
+                    ? 'border-primary bg-primary/10 scale-105'
+                    : 'border-border hover:border-border/50 hover:scale-102'
+                }`}
+              >
+                <div className="text-3xl mb-2">{mood.emoji}</div>
+                <div className="text-sm font-medium">{mood.label}</div>
+              </button>
+            ))}
           </div>
-        )}
+        </div>
+
+        {/* Journal Entry */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            Journal Entry (optional)
+          </label>
+          <textarea
+            value={journalEntry}
+            onChange={(e) => setJournalEntry(e.target.value)}
+            placeholder="Share what's on your mind today... How are you feeling? What happened today?"
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground resize-none"
+            rows={3}
+          />
+        </div>
+
+        {/* Submit Button */}
+        <button
+          onClick={handleSubmit}
+          disabled={!selectedMood || isLoading}
+          className={`w-full py-3 px-4 rounded-md font-medium transition-colors duration-200 ${
+            selectedMood && !isLoading
+              ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
+              : 'bg-muted text-muted-foreground cursor-not-allowed'
+          }`}
+        >
+          {isLoading ? 'Saving...' : 'Save Mood Entry'}
+        </button>
       </div>
-    </Card>
+    </div>
   );
 };
