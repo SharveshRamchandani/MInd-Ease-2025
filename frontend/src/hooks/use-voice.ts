@@ -37,25 +37,42 @@ export const useVoice = (): UseVoiceReturn => {
       const populate = () => {
         const v = window.speechSynthesis.getVoices();
         setVoices(v);
-        // Lock to a single Indian female voice once, if not already fixed
+        
+        // Find and lock to a beautiful Indian lady voice for calm, soothing speech
         if (!aiFixedName && v.length) {
-          const preferredOrder = [
-            (vv: SpeechSynthesisVoice) => /\bhi-IN\b/i.test(vv.lang) && /female|woman|neural|aditi|heera|neerja|swara|kajal|asha|ananya|meera/i.test(vv.name),
-            (vv: SpeechSynthesisVoice) => /\ben-IN\b/i.test(vv.lang) && /female|woman|neural|aditi|heera|neerja|swara|kajal|asha|ananya|meera/i.test(vv.name),
+          const beautifulIndianVoicePriorities = [
+            // Indian English voices (most natural and beautiful)
+            (vv: SpeechSynthesisVoice) => /\ben-IN\b/i.test(vv.lang) && /female|woman|neural|aditi|heera|neerja|swara|kajal|asha|ananya|meera|priya|beautiful|calm|soothing/i.test(vv.name),
             (vv: SpeechSynthesisVoice) => /\ben-IN\b/i.test(vv.lang),
+            // Hindi voices
+            (vv: SpeechSynthesisVoice) => /\bhi-IN\b/i.test(vv.lang) && /female|woman|neural|aditi|heera|neerja|swara|kajal|asha|ananya|meera|priya|beautiful|calm|soothing/i.test(vv.name),
             (vv: SpeechSynthesisVoice) => /\bhi-IN\b/i.test(vv.lang),
+            // Tamil voices
+            (vv: SpeechSynthesisVoice) => /\bta-IN\b/i.test(vv.lang) && /female|woman|neural|aditi|heera|neerja|swara|kajal|asha|ananya|meera|priya|beautiful|calm|soothing/i.test(vv.name),
+            (vv: SpeechSynthesisVoice) => /\bta-IN\b/i.test(vv.lang),
+            // British English (often has beautiful Indian accents)
+            (vv: SpeechSynthesisVoice) => /\ben-GB\b/i.test(vv.lang) && /female|woman|neural|jenny|aria|zira|beautiful|calm|soothing/i.test(vv.name),
+            (vv: SpeechSynthesisVoice) => /\ben-GB\b/i.test(vv.lang),
+            // US English as last resort
+            (vv: SpeechSynthesisVoice) => /\ben-US\b/i.test(vv.lang) && /female|woman|neural|jenny|aria|zira|beautiful|calm|soothing/i.test(vv.name),
+            (vv: SpeechSynthesisVoice) => /\ben-US\b/i.test(vv.lang)
           ];
+          
           let chosen: SpeechSynthesisVoice | undefined;
-          for (const rule of preferredOrder) {
+          for (const rule of beautifulIndianVoicePriorities) {
             chosen = v.find(rule);
-            if (chosen) break;
+            if (chosen) {
+              console.log(`Found beautiful Indian voice: ${chosen.name} (${chosen.lang})`);
+              break;
+            }
           }
-          if (!chosen) {
-            chosen = v.find(vv => /^en/i.test(vv.lang) && /aria|jenny|zira|female|neural/i.test(vv.name)) || v.find(vv => /^en/i.test(vv.lang)) || v[0];
-          }
+          
           if (chosen) {
             setAiFixedName(chosen.name);
             localStorage.setItem('voice:aiFixedName', chosen.name);
+            console.log(`Locked to beautiful Indian voice: ${chosen.name}`);
+          } else {
+            console.warn('No beautiful Indian voice found');
           }
         }
       };
@@ -160,35 +177,74 @@ export const useVoice = (): UseVoiceReturn => {
     return 'en-IN';
   };
 
-  const speak = useCallback(async (text: string, onEnd?: () => void, useAIVoice: boolean = false) => {
-    if (!isSupported || !window.speechSynthesis) {
+  const speak = useCallback(async (text: string, onEnd?: () => void, useAIVoice?: boolean) => {
+    if (!isSupported) {
       console.warn('Speech synthesis not supported');
       return;
     }
 
-    // Stop any current speech
-    window.speechSynthesis.cancel();
+    // Cancel any ongoing speech
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.9; // Slightly slower for better clarity
-    utterance.pitch = 1;
-    utterance.volume = 0.8;
     
-    const chosen = resolveVoice(useAIVoice);
-    if (chosen) {
-      utterance.voice = chosen;
-    }
-    if (useAIVoice) {
-      utterance.rate = 0.9;
-      utterance.pitch = 1.05;
+    // Find the best Indian voice for beautiful, calm, soothing speech
+    const findBeautifulIndianVoice = () => {
+      // Priority order for beautiful Indian lady voices
+      const voicePriorities = [
+        // Indian English voices (most natural)
+        (v: SpeechSynthesisVoice) => v.lang.startsWith('en-IN') && /female|woman|neural|aditi|heera|neerja|swara|kajal|asha|ananya|meera|priya/i.test(v.name),
+        (v: SpeechSynthesisVoice) => v.lang.startsWith('en-IN'),
+        // Hindi voices
+        (v: SpeechSynthesisVoice) => v.lang.startsWith('hi-IN') && /female|woman|neural|aditi|heera|neerja|swara|kajal|asha|ananya|meera|priya/i.test(v.name),
+        (v: SpeechSynthesisVoice) => v.lang.startsWith('hi-IN'),
+        // Tamil voices
+        (v: SpeechSynthesisVoice) => v.lang.startsWith('ta-IN') && /female|woman|neural|aditi|heera|neerja|swara|kajal|asha|ananya|meera|priya/i.test(v.name),
+        (v: SpeechSynthesisVoice) => v.lang.startsWith('ta-IN'),
+        // British English as fallback (often has beautiful Indian accents)
+        (v: SpeechSynthesisVoice) => v.lang.startsWith('en-GB') && /female|woman|neural|jenny|aria|zira/i.test(v.name),
+        (v: SpeechSynthesisVoice) => v.lang.startsWith('en-GB'),
+        // US English as last resort
+        (v: SpeechSynthesisVoice) => v.lang.startsWith('en-US') && /female|woman|neural|jenny|aria|zira/i.test(v.name),
+        (v: SpeechSynthesisVoice) => v.lang.startsWith('en-US')
+      ];
+
+      for (const priority of voicePriorities) {
+        const voice = voices.find(priority);
+        if (voice) {
+          console.log(`Found beautiful Indian voice: ${voice.name} (${voice.lang})`);
+          return voice;
+        }
+      }
+      return null;
+    };
+
+    const beautifulVoice = findBeautifulIndianVoice();
+    
+    if (beautifulVoice) {
+      utterance.voice = beautifulVoice;
+      // Beautiful, calm, soothing settings for natural lady voice
+      utterance.rate = 0.8;    // Slower pace for calm, soothing tone
+      utterance.pitch = 0.85;  // Lower pitch for warm, beautiful voice
+      utterance.volume = 1.0;  // Full volume for clear speech
+      utterance.lang = beautifulVoice.lang;
+      
+      console.log(`Using beautiful Indian voice: ${beautifulVoice.name} with calm, soothing settings`);
+    } else {
+      console.warn('No beautiful Indian voice found - speech disabled');
+      return;
     }
 
     utterance.onstart = () => {
       setIsSpeaking(true);
+      console.log('Beautiful Indian voice started speaking');
     };
 
     utterance.onend = () => {
       setIsSpeaking(false);
+      console.log('Beautiful Indian voice finished speaking');
       if (onEnd) {
         onEnd();
       }
@@ -197,7 +253,7 @@ export const useVoice = (): UseVoiceReturn => {
     utterance.onerror = (event) => {
       // Ignore benign 'interrupted' errors when user clicks to stop or new speech starts
       if ((event as any).error !== 'interrupted') {
-        console.error('Speech synthesis error:', (event as any).error);
+        console.error('Beautiful voice speech error:', (event as any).error);
       }
       setIsSpeaking(false);
       if (onEnd) {
@@ -205,49 +261,10 @@ export const useVoice = (): UseVoiceReturn => {
       }
     };
 
-    // Try server-side TTS first if available
-    try {
-      const { http } = await import('@/lib/api');
-      const language = detectLanguage(text);
-      const tts = await http<any>('/api/tts/synthesize', {
-        method: 'POST',
-        body: {
-          text,
-          language,
-          voiceHint: language === 'en-IN' ? 'en-IN-Neural2-A' : (language === 'hi-IN' ? 'hi-IN-Neural2-A' : 'ta-IN-Standard-A'),
-          rate: utterance.rate,
-          pitch: utterance.pitch,
-        }
-      });
-      if (tts?.success && tts?.data?.audioBase64) {
-        const audio = new Audio(`data:${tts.data.mime};base64,${tts.data.audioBase64}`);
-        audio.onended = () => {
-          setIsSpeaking(false);
-          onEnd && onEnd();
-        };
-        setIsSpeaking(true);
-        audio.play().catch(() => {
-          // Fallback to client TTS if playback fails
-          if (chosen) {
-            synthesisRef.current = utterance;
-            window.speechSynthesis.speak(utterance);
-          }
-        });
-        return;
-      }
-    } catch (e) {
-      // Ignore and fallback to client-side TTS
-    }
-
-    // Only use client TTS if we have an Indian voice
-    if (!chosen) {
-      console.warn('No Indian voice available - speech disabled');
-      return;
-    }
-
+    // Use OS default Indian voices only - no server TTS
     synthesisRef.current = utterance;
     window.speechSynthesis.speak(utterance);
-  }, [isSupported]);
+  }, [isSupported, voices]);
 
   const stopSpeaking = useCallback(() => {
     if (window.speechSynthesis) {

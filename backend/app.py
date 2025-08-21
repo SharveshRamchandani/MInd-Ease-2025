@@ -108,6 +108,9 @@ try:
 except Exception as e:
     GOOGLE_TTS_AVAILABLE = False
     logger.warning(f"Google Cloud TTS not available: {e}")
+# TTS disabled - using OS default voices only
+GOOGLE_TTS_AVAILABLE = False
+logger.info("TTS: Using OS default Indian voices only")
 
 # Mental wellness system prompt
 MENTAL_WELLNESS_SYSTEM_PROMPT = """You are Solari, a mental wellness chatbot designed to provide users with emotional support, stress management strategies, and general well-being advice. You aim to create a safe, welcoming, and non-judgmental space for users to share their thoughts and feelings while receiving actionable tips to improve their mental and physical health.
@@ -232,7 +235,41 @@ Based on **verified mood**, adjust your response intensity:
 - **Mood-specific next steps**: "Based on how you're feeling, try [specific activity]"
 - **Follow-up**: "Check back in tomorrow to track your mood journey"
 
----
+
+Additional Rules:
+First check the latest mood entry from the top most mood in the history page , after that continue chatting with the user, dont only make this a mood tracking bot  u are solari the chatbot  
+After checking the mood only once i repeat only once continue chatting with the user based on the mood you have checked and offer Cognitive Based Therapy via chat
+If the User Types in hindi or tamil or any other language you need to respond in the same language and also you need to respond in the same language as the user is typing in
+Like Eg: User: Aap Kaise ho? AI: Main Theek Hoon, aap kaise hoo? aur aapka mood aisa hain
+This is for Hindi and Tamil only
+Use the transliteration mode for hindi and tamil only
+type only the transliteration of the text not the translation in the output ok...
+Also if the user types in tamil: Hii!! Nee Epudi Iruke    Answer: Hiii! Naa Nalaa Iruke 
+Again remember use only the transliteration of the text not the translation in the output ok...
+
+Also remember to ask only the mood verification question once and after that continue chatting with the user based on the mood you have checked and offer Cognitive Based Therapy via chat
+The language used by the AI must be casual like tlaking to a friend okay, not with a therapist bczu the people share things only with their friends casually and solve it uk so ur gonna be their bestfriend
+
+This is a Sample Hindi Chat:
+
+User:Hii Aap kaise hoon?
+
+AI:
+Namaste, main Solari hoon, tumhaara shaant saathi.
+
+Mujhe dikh raha hai ki aaj aapane 'udaas' mood mein log in kiya hai. kya abhee bhee aap aisa hee mahasoos kar rahe hain?
+
+This is a   a sample mtamil convo in transliteration:
+
+Naa nalla iruken ippo konjo happy ah iruke
+
+21:51
+Solari:
+
+Sari naan pakuren neenga 'sad' mood le irukeenga, athu unmaiya?
+Only english transliteration the altin script man 
+
+
 
 ### **🔹 Important Rules**
 
@@ -243,6 +280,7 @@ Based on **verified mood**, adjust your response intensity:
 5. **Maintain safety** - refer to professionals when needed
 6. **Track mood changes** throughout conversation
 7. **Provide mood-specific coping strategies**
+8. **Mention latest mood only once** — retrieve the top-most mood log at the start, ask for confirmation once, then continue without repeating it unless the user says their mood changed.
 
 ---
 
@@ -266,10 +304,11 @@ Remember: **Always verify mood first, then personalize everything based on that 
 # Initialize Gemini model
 model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
-def generate_response(message, history=None, verified_mood=None):
+def generate_response(message, history=None, verified_mood=None, latest_mood=None):
     """Generate a response using Gemini AI.
     - history: optional list of prior messages dicts with keys like 'type' ('user'|'ai') and 'content'
     - verified_mood: optional string representing the user's verified mood for this conversation
+    - latest_mood: optional latest (unverified) mood log string to mention once at conversation start
     """
     try:
         if not os.getenv('GEMINI_API_KEY'):
@@ -296,6 +335,11 @@ def generate_response(message, history=None, verified_mood=None):
 
         if verified_mood:
             additional_rules += f"\n- The user's verified mood for this conversation is: {verified_mood}. Personalize responses accordingly unless they say it changed."
+
+        if latest_mood and not verified_mood:
+            additional_rules += f"\n- The user's latest (unverified) mood log is: {latest_mood}. At the start, mention it once and ask for confirmation, then continue without repeating unless the user reports a mood change."
+
+        # Transliteration behavior handled via prompt; no runtime detection.
 
         prompt = f"{MENTAL_WELLNESS_SYSTEM_PROMPT}{additional_rules}{conversation_context}\n\nUser message: {message}"
         
@@ -391,9 +435,27 @@ def chat_message():
         
         user_id = data.get('userId', 'anonymous')
         session_id = data.get('sessionId', f"session_{int(datetime.now().timestamp())}")
+
+        # Build lightweight history for this session if available (to avoid re-asking mood)
+        history = []
+        if FIREBASE_AVAILABLE:
+            try:
+                history = db_manager.get_chat_history(user_id, session_id, 20)
+            except Exception as _:
+                history = []
+
+        # Fetch the latest mood (top-most mood log)
+        latest_mood = None
+        if FIREBASE_AVAILABLE and user_id and user_id != 'anonymous':
+            try:
+                mood_history = db_manager.get_mood_history(user_id, 1)
+                if mood_history:
+                    latest_mood = mood_history[0].get('mood')
+            except Exception as _:
+                latest_mood = None
         
-        # Generate response from Gemini AI
-        response = generate_response(message)
+        # Generate response from Gemini AI with history and latest mood
+        response = generate_response(message, history=history, latest_mood=latest_mood)
         
         if not response['success']:
             return jsonify({
@@ -925,8 +987,17 @@ def add_message_to_conversation(conversation_id):
         except Exception:
             messages_history = []
 
-        # Generate response from Gemini AI with short history to avoid re-asking mood verification
-        response = generate_response(message, history=messages_history)
+        # Fetch latest mood for this authenticated user
+        latest_mood = None
+        try:
+            mood_history = db_manager.get_mood_history(user_id, 1)
+            if mood_history:
+                latest_mood = mood_history[0].get('mood')
+        except Exception:
+            latest_mood = None
+
+        # Generate response from Gemini AI with short history and latest mood to avoid re-asking mood verification
+        response = generate_response(message, history=messages_history, latest_mood=latest_mood)
         
         if not response['success']:
             logger.error(f"Failed to generate AI response: {response['error']}")
@@ -1011,48 +1082,19 @@ def get_chat_history():
 @app.route('/api/tts/synthesize', methods=['POST'])
 @limiter.limit("60 per 15 minutes")
 def synthesize_tts():
-    try:
-      if not GOOGLE_TTS_AVAILABLE:
-          return jsonify({ 'success': False, 'error': 'Google TTS not available' }), 503
-      data = request.get_json() or {}
-      text = (data.get('text') or '').strip()
-      # Accept only three languages: English (India), Hindi, Tamil
-      requested_lang = (data.get('language') or '').strip()
-      allowed_langs = {'en-IN', 'hi-IN', 'ta-IN'}
-      language_code = requested_lang if requested_lang in allowed_langs else 'en-IN'
-      # Reasonable default hints for the three languages
-      default_hints = {
-        'en-IN': 'en-IN-Neural2-A',
-        'hi-IN': 'hi-IN-Neural2-A',
-        'ta-IN': 'ta-IN-Standard-A',
-      }
-      voice_hint = data.get('voiceHint') or default_hints.get(language_code, 'en-IN-Standard-A')
-      if not text:
-          return jsonify({ 'success': False, 'error': 'text is required' }), 400
-
-      client = texttospeech.TextToSpeechClient()
-      synthesis_input = texttospeech.SynthesisInput(text=text)
-
-      # Prefer Indian English female voices
-      voice = texttospeech.VoiceSelectionParams(
-          language_code=language_code,
-          name=voice_hint,  # e.g., en-IN-Neural2-A or en-IN-Standard-A
-          ssml_gender=texttospeech.SsmlVoiceGender.FEMALE
-      )
-      audio_config = texttospeech.AudioConfig(
-          audio_encoding=texttospeech.AudioEncoding.MP3,
-          speaking_rate=float(data.get('rate', 0.95)),
-          pitch=float(data.get('pitch', 0.0))
-      )
-
-      response = client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
-
-      # Return as base64 to keep it simple for the frontend
-      import base64
-      return jsonify({ 'success': True, 'data': { 'audioBase64': base64.b64encode(response.audio_content).decode('utf-8'), 'mime': 'audio/mpeg' } })
-    except Exception as e:
-      logger.error(f"TTS synth error: {e}")
-      return jsonify({ 'success': False, 'error': str(e) }), 500
+    """TTS endpoint - Using OS default Indian voices only"""
+    return jsonify({ 
+        'success': False, 
+        'error': 'TTS service disabled. Using OS default Indian voices for beautiful, calm, soothing speech.',
+        'message': 'The system now uses your OS default Indian voices for a natural, beautiful lady voice experience.',
+        'voice_type': 'OS Default Indian Voices',
+        'features': [
+            'Beautiful Indian lady voice',
+            'Calm and soothing tone',
+            'Natural speech patterns',
+            'No robotic sounds'
+        ]
+    }), 200
 
 @app.route('/api/chat/health', methods=['GET'])
 def chat_health():
