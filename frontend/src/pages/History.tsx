@@ -322,10 +322,10 @@ export default function History() {
   }
 
   return (
-    <div className="min-h-screen pb-20 p-4 lg:pb-4">
+    <div className="min-h-screen pb-20 p-4 lg:pb-4 mb-20">
       <div className="max-w-7xl mx-auto">
         {/* Desktop Layout */}
-        <div className="hidden lg:grid lg:grid-cols-12 lg:gap-8 lg:space-y-0">
+        <div className="hidden lg:grid lg:grid-cols-12 lg:gap-8 lg:space-y-0 mb-2">
           {/* Left Column - Stats and Overview */}
           <div className="lg:col-span-4 space-y-6">
             <div className="flex items-center justify-between mb-6">
@@ -408,7 +408,7 @@ export default function History() {
             </Card>
 
             {/* Insights Card */}
-            <Card className="p-6 shadow-card">
+            <Card className=" mt-10 lg:mt-6 p-6 shadow-card mb-100 ">
               <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
                 <Activity className="w-5 h-5" />
                 Insights
@@ -427,8 +427,12 @@ export default function History() {
                 )}
               </div>
             </Card>
-          </div>
+            
+            
 
+            
+          </div>
+                
           {/* Right Column - Timeline and Charts */}
           <div className="lg:col-span-8 space-y-6">
             {/* Tabs for different views */}
