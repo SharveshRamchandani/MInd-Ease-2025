@@ -1,5 +1,6 @@
 # Local development entry point
-if __name__ == '__main__':
+import os
+if __name__ == '__main__' and not os.environ.get('RENDER'):  # Only run locally
     port = int(os.getenv('PORT', 5000))
     debug = os.getenv('NODE_ENV', 'development') == 'development'
     print(f"🚀 Mind-Ease Backend server starting on port {port}")
