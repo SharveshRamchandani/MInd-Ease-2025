@@ -1140,7 +1140,7 @@ def chat_health():
 # Journal endpoints
 @app.route('/api/journals', methods=['GET'])
 @require_auth
-def get_journals():
+def get_journals_api():
     """Get journal entries for a user from Firebase"""
     try:
         # Get user ID from verified Firebase token
