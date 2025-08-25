@@ -1,3 +1,12 @@
+# Local development entry point
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 5000))
+    debug = os.getenv('NODE_ENV', 'development') == 'development'
+    print(f"🚀 Mind-Ease Backend server starting on port {port}")
+    print(f"📊 Health check: http://localhost:{port}/health")
+    print(f"🔗 API Base URL: http://localhost:{port}/api")
+    print(f"🌍 Environment: {os.getenv('NODE_ENV', 'development')}")
+    app.run(host='0.0.0.0', port=port, debug=debug)
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -294,7 +303,8 @@ Only english transliteration the altin script man
 1. **NEVER assume mood** - always verify with user
 2. **Respect mood limits** - max 3 entries per day
 3. **Escalate support** for high-stress moods
-git push --force5. **Maintain safety** - refer to professionals when needed
+4. **Personalize everything** based on verified mood
+5. **Maintain safety** - refer to professionals when needed
 6. **Track mood changes** throughout conversation
 7. **Provide mood-specific coping strategies**
 8. **Mention latest mood only once** — retrieve the top-most mood log at the start, ask for confirmation once, then continue without repeating it unless the user says their mood changed.
