@@ -190,7 +190,7 @@ export default function Home(): React.JSX.Element {
       if (!currentUser) return;
       try {
         const token = await currentUser.getIdToken();
-        const response = await fetch('http://localhost:5000/api/mood/history', {
+        const response = await fetch('https://mind-ease-2025.onrender.com/api/mood/history', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -235,7 +235,7 @@ export default function Home(): React.JSX.Element {
       setIsSaving(true);
       setSelectedMood(moodValue);
       const token = await currentUser.getIdToken();
-      const response = await fetch('http://localhost:5000/api/mood/log', {
+      const response = await fetch('https://mind-ease-2025.onrender.com/api/mood/log', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

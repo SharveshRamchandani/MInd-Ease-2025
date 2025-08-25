@@ -241,7 +241,7 @@ export default function History() {
       // Get Firebase ID token for authentication
       const token = await currentUser.getIdToken();
       
-      const response = await fetch(`http://localhost:5000/api/mood/history`, {
+      const response = await fetch(`https://mind-ease-2025.onrender.com/api/mood/history`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

@@ -321,7 +321,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     if (!conversationId) {
       // Do not auto-create on reload; only create when user starts messaging on chat page
       try {
-        const response = await fetch('http://localhost:5000/api/conversations', {
+        const response = await fetch('https://mind-ease-2025.onrender.com/api/conversations', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

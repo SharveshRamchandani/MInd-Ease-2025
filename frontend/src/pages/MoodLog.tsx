@@ -33,7 +33,7 @@ export default function MoodLog() {
       const token = await currentUser.getIdToken();
       
       // Save mood to Firebase via backend API
-      const response = await fetch('http://localhost:5000/api/mood/log', {
+      const response = await fetch('https://mind-ease-2025.onrender.com/api/mood/log', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

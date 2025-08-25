@@ -1,6 +1,6 @@
 import { auth } from './firebase';
 
-const DEFAULT_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
+const DEFAULT_BASE = import.meta.env.VITE_API_BASE || 'https://mind-ease-2025.onrender.com';
 
 export const apiBase = DEFAULT_BASE.replace(/\/$/, '');
 
@@ -13,7 +13,7 @@ export async function http<T = any>(path: string, options: { method?: HttpMethod
 	
 	try {
 		// Get the current user's ID token for authentication
-		let authHeader = '';
+		let authHeader = '';;
 		try {
 			const currentUser = auth.currentUser;
 			if (currentUser) {
