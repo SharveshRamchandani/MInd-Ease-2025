@@ -1,30 +1,22 @@
-# Local development entry point
+
+# All imports at the top
 import os
-# Only run the Flask dev server locally (never on Render)
-if __name__ == '__main__' and os.environ.get('RENDER_EXTERNAL_URL') is None:
-    port = int(os.getenv('PORT', 5000))
-    debug = os.getenv('NODE_ENV', 'development') == 'development'
-    print(f"🚀 Mind-Ease Backend server starting on port {port}")
-    print(f"📊 Health check: http://localhost:{port}/health")
-    print(f"🔗 API Base URL: http://localhost:{port}/api")
-    print(f"🌍 Environment: {os.getenv('NODE_ENV', 'development')}")
-    app.run(host='0.0.0.0', port=port, debug=debug)
+import logging
+import json
+from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import google.generativeai as genai
-import os
-import json
-from datetime import datetime, timedelta
 from dotenv import load_dotenv
-import logging
 import firebase_admin
 from firebase_admin import auth, credentials
 
-# Configure logging first
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+import os
 
 # Import Firebase database
 try:
