@@ -233,32 +233,28 @@ export default function History() {
   // Fetch mood history from Firebase
   const fetchMoodHistory = async (showLoading = true) => {
     if (!currentUser) return;
-    
     if (showLoading) setIsLoading(true);
     setIsRefreshing(true);
-    
     try {
-      // Get Firebase ID token for authentication
       const token = await currentUser.getIdToken();
-      
       const response = await fetch(`https://mind-ease-2025.onrender.com/api/mood/history`, {
+        method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
       });
-      
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          // Convert timestamp strings to Date objects
           const history = data.data.mood_logs.map((entry: any) => ({
             ...entry,
             timestamp: new Date(entry.timestamp),
-            emoji: moodToEmoji[entry.mood] || "😐"
+            emoji: moodToEmoji[entry.mood] || "\ud83d\ude10"
           }));
           setMoodHistory(history);
-          console.log('Fetched mood history:', history); // Debug log
-          
+          console.log('Fetched mood history:', history);
           if (showLoading) {
             toast({
               title: "Mood history loaded",

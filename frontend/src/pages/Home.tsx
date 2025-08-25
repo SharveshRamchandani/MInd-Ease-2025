@@ -191,9 +191,12 @@ export default function Home(): React.JSX.Element {
       try {
         const token = await currentUser.getIdToken();
         const response = await fetch('https://mind-ease-2025.onrender.com/api/mood/history', {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${token}`
-          }
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
         });
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);

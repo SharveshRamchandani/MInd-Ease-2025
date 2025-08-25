@@ -94,15 +94,15 @@ app = Flask(__name__)
 
 # Configure CORS
 CORS(app, origins=[
-    'https://mind-ease-2025.vercel.app',
+    'https://mindease2025.vercel.app',
     'https://mind-ease-2025.onrender.com',
     os.getenv('FRONTEND_URL', 'http://localhost:5173'),
-    'http://localhost:8080',  # Add support for port 8080
-    'http://localhost:3000',  # Add support for port 3000 (common React port)
-    'http://127.0.0.1:5173',  # Add support for 127.0.0.1
+    'http://localhost:8080',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
     'http://127.0.0.1:8080',
     'http://127.0.0.1:3000'
-])
+], supports_credentials=True, allow_headers=["Content-Type", "Authorization"], methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 # Configure rate limiting
 limiter = Limiter(
