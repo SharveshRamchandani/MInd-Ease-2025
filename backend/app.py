@@ -1,4 +1,3 @@
-
 # All imports at the top
 import os
 import logging
@@ -1137,6 +1136,42 @@ def chat_health():
     })
 
 # Wellness endpoints
+
+# Journal endpoints
+@app.route('/api/journals', methods=['GET'])
+@require_auth
+def get_journals():
+    """Get journal entries for a user from Firebase"""
+    try:
+        # Get user ID from verified Firebase token
+        user_id = request.user['uid']
+
+        if not FIREBASE_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available',
+                'message': 'Firebase database is not connected'
+            }), 503
+
+        # Fetch journals from Firestore using db_manager
+        journals = db_manager.get_journals(user_id)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'journal_logs': journals,
+                'count': len(journals),
+                'userId': user_id,
+                'timestamp': datetime.now().isoformat()
+            }
+        })
+    except Exception as e:
+        logger.error(f"Get journals error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'Failed to get journals'
+        }), 500
 @app.route('/api/wellness/coping-strategies', methods=['GET'])
 def coping_strategies():
     try:
@@ -1460,6 +1495,41 @@ def internal_error(error):
         'message': 'Something went wrong'
     }), 500
 
+@app.route('/api/journals', methods=['GET'])
+@require_auth
+def get_journals():
+    """Get journal entries for a user from Firebase"""
+    try:
+        # Get user ID from verified Firebase token
+        user_id = request.user['uid']
+
+        if not FIREBASE_AVAILABLE:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available',
+                'message': 'Firebase database is not connected'
+            }), 503
+
+        # Fetch journals from Firestore using db_manager
+        journals = db_manager.get_journals(user_id)  # You may need to implement this in db_manager
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'journal_logs': journals,
+                'count': len(journals),
+                'userId': user_id,
+                'timestamp': datetime.now().isoformat()
+            }
+        })
+    except Exception as e:
+        logger.error(f"Get journals error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': 'Failed to get journals'
+        }), 500
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     debug = os.getenv('NODE_ENV', 'development') == 'development'
@@ -1469,4 +1539,4 @@ if __name__ == '__main__':
     print(f"🔗 API Base URL: http://localhost:{port}/api")
     print(f"🌍 Environment: {os.getenv('NODE_ENV', 'development')}")
     
-    app.run(host='0.0.0.0', port=port, debug=debug) 
+    app.run(host='0.0.0.0', port=port, debug=debug)

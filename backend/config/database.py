@@ -7,6 +7,30 @@ from .firebase import db, COLLECTIONS
 logger = logging.getLogger(__name__)
 
 class DatabaseManager:
+    def get_journals(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get journal entries for a user from the journals collection"""
+        try:
+            logger.info(f"Getting journals for user: {user_id}")
+            query = self.db.collection(self.collections['journals'])\
+                .where('user_id', '==', user_id)\
+                .limit(limit)
+            docs = query.stream()
+            journals = []
+            for doc in docs:
+                journal_data = doc.to_dict()
+                journal_data['id'] = doc.id
+                journals.append(journal_data)
+                logger.info(f"Found journal entry: {doc.id} - {journal_data.get('text', '')}")
+            # Sort by timestamp descending (newest first)
+            try:
+                journals.sort(key=lambda x: x.get('timestamp', datetime.min), reverse=True)
+            except Exception as sort_error:
+                logger.warning(f"Could not sort journals by timestamp: {sort_error}. Keeping original order.")
+            logger.info(f"Returning {len(journals)} journals for user {user_id}")
+            return journals
+        except Exception as e:
+            logger.error(f"Failed to get journals for user {user_id}: {str(e)}")
+            return []
     """Database manager for Firestore operations"""
     
     def __init__(self):
