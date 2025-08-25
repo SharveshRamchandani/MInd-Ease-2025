@@ -94,6 +94,7 @@ app = Flask(__name__)
 
 # Configure CORS
 CORS(app, origins=[
+    'https://mind-ease-2025.vercel.app/',
     os.getenv('FRONTEND_URL', 'http://localhost:5173'),
     'http://localhost:8080',  # Add support for port 8080
     'http://localhost:3000',  # Add support for port 3000 (common React port)
