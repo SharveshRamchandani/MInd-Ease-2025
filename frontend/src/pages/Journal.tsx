@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Save, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 export default function Journal(): React.JSX.Element {
@@ -16,13 +17,20 @@ export default function Journal(): React.JSX.Element {
   const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const { toast } = useToast();
+  const { currentUser } = useAuth();
 
   const today = format(new Date(), "EEEE, MMMM d, yyyy");
 
   useEffect(() => {
     const fetchHistory = async () => {
-  const response = await fetch('https://mind-ease-2025.onrender.com/api/journals', {
+      if (!currentUser) return;
+      const token = await currentUser.getIdToken();
+      const response = await fetch('https://mind-ease-2025.onrender.com/api/journals', {
         method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         credentials: 'include'
       });
       if (!response.ok) return;
@@ -32,7 +40,7 @@ export default function Journal(): React.JSX.Element {
       }
     };
     fetchHistory();
-  }, []);
+  }, [currentUser]);
 
   const handleSave = async () => {
     if (!entryText.trim()) {
