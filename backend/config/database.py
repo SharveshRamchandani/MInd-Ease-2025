@@ -7,6 +7,14 @@ from .firebase import db, COLLECTIONS
 logger = logging.getLogger(__name__)
 
 class DatabaseManager:
+    def add_journal(self, user_id: str, text: str, timestamp: str) -> str:
+        doc_ref = self.db.collection(self.collections['journals']).document()
+        doc_ref.set({
+            'user_id': user_id,
+            'text': text,
+            'timestamp': timestamp
+        })
+        return doc_ref.id
     def get_journals(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
         """Get journal entries for a user from the journals collection"""
         try:
@@ -385,6 +393,22 @@ class DatabaseManager:
                 'wellness_activities_count': 0,
                 'total_activities': 0
             }
+    
+    def add_journal(self, user_id: str, text: str, timestamp: str) -> str:
+        """Add a new journal entry"""
+        try:
+            logger.info(f"Adding journal entry for user: {user_id}")
+            doc_ref = db.collection('journals').document()
+            doc_ref.set({
+                'user_id': user_id,
+                'text': text,
+                'timestamp': timestamp
+            })
+            logger.info(f"Journal entry added with ID: {doc_ref.id}")
+            return doc_ref.id
+        except Exception as e:
+            logger.error(f"Failed to add journal entry: {str(e)}")
+            raise
 
 # Create a global instance
-db_manager = DatabaseManager() 
+db_manager = DatabaseManager()

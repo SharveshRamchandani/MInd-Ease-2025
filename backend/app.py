@@ -302,7 +302,7 @@ Only english transliteration the altin script man
 5. **Maintain safety** - refer to professionals when needed
 6. **Track mood changes** throughout conversation
 7. **Provide mood-specific coping strategies**
-8. **Mention latest mood only once** — retrieve the top-most mood log at the start, ask for confirmation once, then continue without repeating it unless the user says their mood changed.
+8. **Mention latest mood only once** — retrieve the top-most mood log at the start, ask for confirmation once, then continue without repeating it unless the user reports a mood change.
 
 ---
 
@@ -1172,6 +1172,7 @@ def get_journals_api():
             'error': 'Internal server error',
             'message': 'Failed to get journals'
         }), 500
+
 @app.route('/api/wellness/coping-strategies', methods=['GET'])
 def coping_strategies():
     try:

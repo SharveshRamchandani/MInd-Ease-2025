@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { MoodSelector } from "@/components/mood/mood-selector";
 import { CopingStrategies } from "@/components/wellness/coping-strategies";
@@ -15,8 +15,7 @@ const MoodLog = () => {
   const { toast } = useToast();
   const { currentUser } = useAuth();
 
-
-  // Edit journal entry
+  // Handles mood submission
   const handleMoodSubmit = async (mood: string, journal: string) => {
     if (!currentUser) {
       toast({
@@ -30,10 +29,8 @@ const MoodLog = () => {
     setIsLoading(true);
 
     try {
-      // Get Firebase ID token for authentication
       const token = await currentUser.getIdToken();
 
-      // Save mood to Firebase via backend API
       const response = await fetch('https://mind-ease-2025.onrender.com/api/mood/log', {
         method: 'POST',
         headers: {
@@ -54,22 +51,17 @@ const MoodLog = () => {
       const data = await response.json();
 
       if (data.success) {
-        // Mood saved successfully
         setSavedMood(mood);
-
         toast({
           title: "Mood saved successfully!",
           description: "Your daily check-in has been recorded.",
         });
-
-        // Redirect to History page after a short delay to show the saved mood
         setTimeout(() => {
           navigate('/history');
         }, 2000);
       } else {
         throw new Error(data.error || 'Failed to save mood');
       }
-
     } catch (error) {
       console.error('Error saving mood:', error);
       toast({
@@ -166,13 +158,10 @@ const MoodLog = () => {
               </Link>
               <h1 className="text-2xl font-semibold">Daily Mood Check-in</h1>
             </div>
-
             <div className="lg:sticky lg:top-6">
               <MoodSelector onMoodSubmit={handleMoodSubmit} isLoading={isLoading} />
             </div>
-
           </div>
-
           <div className="space-y-6">
             <Card className="p-6 shadow-card">
               <h3 className="text-xl font-semibold mb-4">Why track your mood?</h3>
@@ -186,7 +175,6 @@ const MoodLog = () => {
                 </ul>
               </div>
             </Card>
-
             <Card className="p-6 shadow-card">
               <h3 className="text-xl font-semibold mb-4">Tips for accurate tracking</h3>
               <div className="space-y-3 text-muted-foreground">
@@ -198,7 +186,6 @@ const MoodLog = () => {
             </Card>
           </div>
         </div>
-
         {/* Mobile Layout */}
         <div className="lg:hidden max-w-md mx-auto space-y-6">
           <div className="flex items-center gap-3 mb-6">
@@ -209,9 +196,7 @@ const MoodLog = () => {
             </Link>
             <h1 className="text-xl font-semibold">Daily Mood Check-in</h1>
           </div>
-
           <MoodSelector onMoodSubmit={handleMoodSubmit} isLoading={isLoading} />
-
         </div>
       </div>
     </div>

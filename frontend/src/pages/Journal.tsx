@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ export default function Journal(): React.JSX.Element {
   const [entryText, setEntryText] = useState<string>("");
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [journalHistory, setJournalHistory] = useState<any[]>([]);
+  const [moodEntries, setMoodEntries] = useState<any[]>([]);
   const [viewId, setViewId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -22,7 +23,8 @@ export default function Journal(): React.JSX.Element {
   const today = format(new Date(), "EEEE, MMMM d, yyyy");
 
   useEffect(() => {
-    const fetchHistory = async () => {
+    // Fetch journal entries
+    const fetchJournalHistory = async () => {
       if (!currentUser) return;
       const token = await currentUser.getIdToken();
       const response = await fetch('https://mind-ease-2025.onrender.com/api/journals', {
@@ -39,8 +41,47 @@ export default function Journal(): React.JSX.Element {
         setJournalHistory(data.data.journal_logs || []);
       }
     };
-    fetchHistory();
+
+    // Fetch mood entries
+    const fetchMoodEntries = async () => {
+      if (!currentUser) return;
+      const token = await currentUser.getIdToken();
+      const response = await fetch('https://mind-ease-2025.onrender.com/api/mood/history', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.success) {
+        setMoodEntries(data.data.mood_logs || []);
+      }
+    };
+
+    fetchJournalHistory();
+    fetchMoodEntries();
   }, [currentUser]);
+
+  // Combine both sources for display
+  const combinedEntries = [
+    ...journalHistory.map(entry => ({
+      id: entry.id,
+      text: entry.text,
+      timestamp: entry.timestamp,
+      source: "journal"
+    })),
+    ...moodEntries
+      .filter(entry => entry.journal && entry.journal.trim() !== "")
+      .map(entry => ({
+        id: entry.id,
+        text: entry.journal,
+        timestamp: entry.timestamp,
+        source: "mood"
+      }))
+  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   const handleSave = async () => {
     if (!entryText.trim()) {
@@ -49,10 +90,40 @@ export default function Journal(): React.JSX.Element {
     }
     setIsSaving(true);
     try {
-      // TODO: Replace with real persistence (Firebase/backend)
-      await new Promise((r) => setTimeout(r, 800));
+      if (!currentUser) throw new Error("Not authenticated");
+      const token = await currentUser.getIdToken();
+      const response = await fetch('https://mind-ease-2025.onrender.com/api/journals', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: entryText,
+          timestamp: new Date().toISOString()
+        })
+      });
+      if (!response.ok) throw new Error("Failed to save journal");
       toast({ title: "Journal saved", description: "Your daily entry has been saved." });
       setEntryText("");
+      // Refetch journal history
+      const data = await response.json();
+      if (data.success) {
+        const token = await currentUser.getIdToken();
+        const response = await fetch('https://mind-ease-2025.onrender.com/api/journals', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.success) {
+          setJournalHistory(data.data.journal_logs || []);
+        }
+      }
     } catch (e) {
       toast({ title: "Save failed", description: "Please try again.", variant: "destructive" });
     } finally {
@@ -122,19 +193,20 @@ export default function Journal(): React.JSX.Element {
           </div>
         </Card>
 
-        {/* Journal History Section */}
+        {/* Combined Journal History Section */}
         <div className="mt-8">
           <h2 className="text-lg font-semibold mb-2">Your Journal History</h2>
-          {journalHistory.length === 0 ? (
+          {combinedEntries.length === 0 ? (
             <p className="text-muted-foreground">No previous entries yet.</p>
           ) : (
             <div className="space-y-4">
-              {journalHistory.map((entry) => (
+              {combinedEntries.map((entry) => (
                 <div key={entry.id} className="bg-background p-4 rounded shadow">
                   <div className="flex justify-between items-center">
                     <div>
                       <div className="text-sm text-muted-foreground">
                         {entry.timestamp ? String(entry.timestamp) : "No timestamp"}
+                        {entry.source === "mood" && <span className="ml-2 text-xs text-primary">(from Mood Log)</span>}
                       </div>
                       <div className="font-medium">
                         {entry.text || <span className="text-muted-foreground">(No journal)</span>}
@@ -172,7 +244,9 @@ export default function Journal(): React.JSX.Element {
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-background p-6 rounded shadow-lg max-w-md w-full">
                 <h3 className="text-lg font-semibold mb-2">Journal Entry</h3>
-                <div>{journalHistory.find((j) => j.id === viewId)?.text || "(No journal)"}</div>
+                <div>
+                  {combinedEntries.find((j) => j.id === viewId)?.text || "(No journal)"}
+                </div>
                 <button className="mt-4 px-4 py-2 bg-primary text-white rounded" onClick={handleViewClose}>
                   Close
                 </button>
