@@ -7,7 +7,7 @@ import { ArrowLeft, Save, RotateCcw, Edit, Eye, X, BookOpen, TrendingUp, Plus } 
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -150,6 +150,9 @@ export default function Journal(): React.JSX.Element {
       if (!currentUser) throw new Error("Not authenticated");
       const token = await currentUser.getIdToken();
       
+      // Store original text for rollback
+      const originalEntry = journalHistory.find(entry => entry.id === editId);
+      
       // Update the entry locally first for immediate feedback
       setJournalHistory(prev => 
         prev.map(entry => 
@@ -159,25 +162,25 @@ export default function Journal(): React.JSX.Element {
         )
       );
       
-      // Also update combined entries immediately
-      const updatedCombinedEntries = combinedEntries.map(entry => 
-        entry.id === editId 
-          ? { ...entry, text: editText }
-          : entry
-      );
+      // Clear edit state immediately after local update
+      setEditId(null);
+      setEditText("");
       
       toast({ 
         title: "Entry updated", 
         description: "Your journal entry has been successfully updated." 
       });
       
-      // Clear edit state
-      setEditId(null);
-      setEditText("");
-      
-      // Refresh data from server to ensure consistency
-      await fetchJournalHistory();
-      await fetchMoodEntries();
+      // TODO: When backend PATCH endpoint is ready, call it here
+      // const response = await fetch(`https://mind-ease-2025.onrender.com/api/journals/${editId}`, {
+      //   method: 'PATCH',
+      //   headers: {
+      //     'Authorization': `Bearer ${token}`,
+      //     'Content-Type': 'application/json'
+      //   },
+      //   body: JSON.stringify({ text: editText })
+      // });
+      // if (!response.ok) throw new Error('Failed to update on server');
       
     } catch (e) {
       console.error('Edit save error:', e);
@@ -186,8 +189,9 @@ export default function Journal(): React.JSX.Element {
         description: "Failed to update your journal entry. Please try again.", 
         variant: "destructive" 
       });
-      // Revert local changes on error
+      // Revert to original on error
       await fetchJournalHistory();
+      await fetchMoodEntries();
     } finally {
       setIsEditing(false);
     }
@@ -462,11 +466,13 @@ export default function Journal(): React.JSX.Element {
             <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="text-xl">Journal Entry</DialogTitle>
-                {viewId && (
-                  <p className="text-sm text-muted-foreground">
-                    {format(new Date(combinedEntries.find(j => j.id === viewId)?.timestamp || new Date()), 'EEEE, MMMM d, yyyy \u2022 h:mm a')}
-                  </p>
-                )}
+                <DialogDescription>
+                  {viewId ? (
+                    format(new Date(combinedEntries.find(j => j.id === viewId)?.timestamp || new Date()), 'EEEE, MMMM d, yyyy \u2022 h:mm a')
+                  ) : (
+                    "View your journal entry in detail"
+                  )}
+                </DialogDescription>
               </DialogHeader>
               <div className="py-6">
                 <div className="prose prose-base max-w-none">
