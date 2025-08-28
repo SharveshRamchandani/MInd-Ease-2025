@@ -52,7 +52,8 @@ COLLECTIONS = {
     'mood_logs': 'mood_logs',
     'wellness_activities': 'wellness_activities',
     'coping_strategies': 'coping_strategies',
-    'motivational_quotes': 'motivational_quotes'
+    'motivational_quotes': 'motivational_quotes',
+    'journals': 'journals'
 }
 
 # Initialize Firebase when module is imported

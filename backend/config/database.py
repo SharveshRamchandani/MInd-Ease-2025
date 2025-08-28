@@ -1,4 +1,5 @@
 from firebase_admin import firestore
+from google.cloud.firestore import Query
 from datetime import datetime
 import logging
 from typing import Dict, List, Optional, Any
@@ -7,14 +8,12 @@ from .firebase import db, COLLECTIONS
 logger = logging.getLogger(__name__)
 
 class DatabaseManager:
-    def add_journal(self, user_id: str, text: str, timestamp: str) -> str:
-        doc_ref = self.db.collection(self.collections['journals']).document()
-        doc_ref.set({
-            'user_id': user_id,
-            'text': text,
-            'timestamp': timestamp
-        })
-        return doc_ref.id
+    """Database manager for Firestore operations"""
+    
+    def __init__(self):
+        self.db = db
+        self.collections = COLLECTIONS
+    
     def get_journals(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
         """Get journal entries for a user from the journals collection"""
         try:
@@ -39,11 +38,6 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Failed to get journals for user {user_id}: {str(e)}")
             return []
-    """Database manager for Firestore operations"""
-    
-    def __init__(self):
-        self.db = db
-        self.collections = COLLECTIONS
     
     def create_user(self, user_data: Dict[str, Any]) -> str:
         """Create a new user in the database"""
@@ -80,7 +74,7 @@ class DatabaseManager:
             logger.error(f"Failed to update user {user_id}: {str(e)}")
             return False
     
-    def create_conversation(self, user_id: str, title: str = None) -> str:
+    def create_conversation(self, user_id: str, title: Optional[str] = None) -> str:
         """Create a new conversation"""
         try:
             conversation_data = {
@@ -113,7 +107,10 @@ class DatabaseManager:
                 raise Exception("Conversation not found")
             
             conversation_data = conversation_doc.to_dict()
-            messages = conversation_data.get('messages', [])
+            if conversation_data is not None:
+                messages = conversation_data.get('messages', [])
+            else:
+                messages = []
             
             logger.info(f"Current messages in conversation: {len(messages)}")
             
@@ -159,22 +156,23 @@ class DatabaseManager:
             logger.error(f"Failed to get conversations for user {user_id}: {str(e)}")
             return []
 
-    def get_conversation(self, conversation_id: str, user_id: str = None) -> Optional[Dict[str, Any]]:
+    def get_conversation(self, conversation_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Get a specific conversation by ID, with optional user ownership validation"""
         try:
             logger.info(f"Getting conversation: {conversation_id} for user: {user_id}")
             doc = self.db.collection(self.collections['conversations']).document(conversation_id).get()
             if doc.exists:
                 conversation_data = doc.to_dict()
-                conversation_data['id'] = doc.id
-                
-                # If user_id is provided, validate ownership
-                if user_id and conversation_data.get('user_id') != user_id:
-                    logger.warning(f"User {user_id} attempted to access conversation {conversation_id} owned by {conversation_data.get('user_id')}")
-                    return None
-                
-                logger.info(f"Found conversation: {conversation_id} with {len(conversation_data.get('messages', []))} messages")
-                return conversation_data
+                if conversation_data is not None:
+                    conversation_data['id'] = doc.id
+                    
+                    # If user_id is provided, validate ownership
+                    if user_id and conversation_data.get('user_id') != user_id:
+                        logger.warning(f"User {user_id} attempted to access conversation {conversation_id} owned by {conversation_data.get('user_id')}")
+                        return None
+                    
+                    logger.info(f"Found conversation: {conversation_id} with {len(conversation_data.get('messages', []))} messages")
+                    return conversation_data
             else:
                 logger.warning(f"Conversation {conversation_id} not found")
             return None
@@ -182,7 +180,7 @@ class DatabaseManager:
             logger.error(f"Failed to get conversation {conversation_id}: {str(e)}")
             return None
 
-    def delete_conversation(self, conversation_id: str, user_id: str = None) -> bool:
+    def delete_conversation(self, conversation_id: str, user_id: Optional[str] = None) -> bool:
         """Delete a conversation, with optional user ownership validation"""
         try:
             # If user_id is provided, validate ownership before deletion
@@ -232,7 +230,7 @@ class DatabaseManager:
             if session_id:
                 query = query.where('session_id', '==', session_id)
             
-            query = query.order_by('timestamp', direction=firestore.Query.DESCENDING).limit(limit)
+            query = query.order_by('timestamp', direction=Query.DESCENDING).limit(limit)
             
             docs = query.stream()
             messages = []
@@ -345,7 +343,7 @@ class DatabaseManager:
         try:
             query = self.db.collection(self.collections['wellness_activities'])\
                 .where('user_id', '==', user_id)\
-                .order_by('timestamp', direction=firestore.Query.DESCENDING)\
+                .order_by('timestamp', direction=Query.DESCENDING)\
                 .limit(limit)
             
             docs = query.stream()
@@ -398,7 +396,7 @@ class DatabaseManager:
         """Add a new journal entry"""
         try:
             logger.info(f"Adding journal entry for user: {user_id}")
-            doc_ref = db.collection('journals').document()
+            doc_ref = self.db.collection(self.collections['journals']).document()
             doc_ref.set({
                 'user_id': user_id,
                 'text': text,

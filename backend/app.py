@@ -3,7 +3,7 @@ import os
 import logging
 import json
 from datetime import datetime, timedelta
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, g
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -15,9 +15,9 @@ from firebase_admin import auth, credentials
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-import os
 
 # Import Firebase database
+db_manager = None
 try:
     from config.database import db_manager
     # Firestore can still be None if initialization failed; detect that
@@ -28,6 +28,7 @@ try:
         logger.warning("Firebase imported, but Firestore client is None – running without database")
 except Exception as e:
     FIREBASE_AVAILABLE = False
+    db_manager = None
     logger.warning(f"Firebase not available - running without database: {str(e)}")
 
 # Initialize Firebase Admin SDK for authentication
@@ -71,8 +72,8 @@ def require_auth(f):
                 'message': 'Valid Firebase ID token is required'
             }), 401
         
-        # Add user info to request context
-        request.user = decoded_token
+        # Add user info to request context using Flask's g object
+        g.user = decoded_token
         return f(*args, **kwargs)
     
     decorated_function.__name__ = f.__name__
@@ -103,15 +104,25 @@ limiter = Limiter(
 )
 
 # Configure Gemini AI
-genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-
-# Optional: Google Cloud TTS client
 try:
-    from google.cloud import texttospeech
-    GOOGLE_TTS_AVAILABLE = True
+    # These are the official public APIs from google.generativeai
+    # Type checker may flag as private but they are documented public APIs
+    genai.configure(api_key=os.getenv('GEMINI_API_KEY'))  # type: ignore
+    GEMINI_AI_AVAILABLE = True
+except Exception as e:
+    GEMINI_AI_AVAILABLE = False
+    logger.warning(f"Gemini AI configuration failed: {e}")
+
+# Optional: Google Cloud TTS client (disabled for now)
+try:
+    # Commented out to avoid import errors - using OS default voices
+    # from google.cloud import texttospeech
+    GOOGLE_TTS_AVAILABLE = False
+    logger.info("Google Cloud TTS import disabled - using OS default voices")
 except Exception as e:
     GOOGLE_TTS_AVAILABLE = False
     logger.warning(f"Google Cloud TTS not available: {e}")
+    
 # TTS disabled - using OS default voices only
 GOOGLE_TTS_AVAILABLE = False
 logger.info("TTS: Using OS default Indian voices only")
@@ -324,7 +335,17 @@ Remember: **Always verify mood first, then personalize everything based on that 
 """
 
 # Initialize Gemini model
-model = genai.GenerativeModel('gemini-2.0-flash-exp')
+model = None
+if GEMINI_AI_AVAILABLE:
+    try:
+        # GenerativeModel is the official public API from google.generativeai
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')  # type: ignore
+        logger.info("Gemini AI model initialized successfully")
+    except Exception as e:
+        model = None
+        logger.warning(f"Gemini AI model initialization failed: {e}")
+else:
+    logger.warning("Gemini AI not available - chatbot responses will be limited")
 
 def generate_response(message, history=None, verified_mood=None, latest_mood=None):
     """Generate a response using Gemini AI.
@@ -335,6 +356,9 @@ def generate_response(message, history=None, verified_mood=None, latest_mood=Non
     try:
         if not os.getenv('GEMINI_API_KEY'):
             raise Exception('Gemini API key is not configured')
+        
+        if not model:
+            raise Exception('Gemini AI model is not available')
         
         # Create the prompt with system context and lightweight conversation memory
         conversation_context = ""
@@ -384,6 +408,9 @@ def generate_response(message, history=None, verified_mood=None, latest_mood=Non
 def analyze_mood(text):
     """Analyze mood from text using Gemini AI"""
     try:
+        if not model:
+            raise Exception('Gemini AI model is not available')
+            
         prompt = f"""Analyze the following text and determine the users emotional state. Respond with a JSON object containing:
         {{
             "mood": "primary emotion (happy, sad, anxious, angry, calm, etc.)",
@@ -430,7 +457,7 @@ def health_check():
         'timestamp': datetime.now().isoformat(),
         'environment': os.getenv('NODE_ENV', 'development'),
         'services': {
-            'gemini_ai': 'connected' if os.getenv('GEMINI_API_KEY') else 'disconnected',
+            'gemini_ai': 'connected' if (os.getenv('GEMINI_API_KEY') and model) else 'disconnected',
             'firebase_db': 'connected' if FIREBASE_AVAILABLE else 'disconnected'
         }
     })
@@ -460,7 +487,7 @@ def chat_message():
 
         # Build lightweight history for this session if available (to avoid re-asking mood)
         history = []
-        if FIREBASE_AVAILABLE:
+        if FIREBASE_AVAILABLE and db_manager:
             try:
                 history = db_manager.get_chat_history(user_id, session_id, 20)
             except Exception as _:
@@ -468,7 +495,7 @@ def chat_message():
 
         # Fetch the latest mood (top-most mood log)
         latest_mood = None
-        if FIREBASE_AVAILABLE and user_id and user_id != 'anonymous':
+        if FIREBASE_AVAILABLE and db_manager and user_id and user_id != 'anonymous':
             try:
                 mood_history = db_manager.get_mood_history(user_id, 1)
                 if mood_history:
@@ -487,7 +514,7 @@ def chat_message():
             }), 500
         
         # Save to Firebase database if available
-        if FIREBASE_AVAILABLE:
+        if FIREBASE_AVAILABLE and db_manager:
             try:
                 # Save user message
                 user_message_data = {
@@ -564,7 +591,7 @@ def analyze_mood_endpoint():
             }), 500
         
         # Save mood log to Firebase if available
-        if FIREBASE_AVAILABLE:
+        if FIREBASE_AVAILABLE and db_manager:
             try:
                 mood_data = {
                     'text': text,
@@ -606,7 +633,7 @@ def log_mood():
             }), 400
         
         # Get user ID from verified Firebase token
-        user_id = request.user['uid']
+        user_id = g.user['uid']
         mood = data.get('mood')
         journal = data.get('journal', '')
         
@@ -618,8 +645,8 @@ def log_mood():
         
         logger.info(f"Logging mood for user: {user_id}, Mood: {mood}")
         
-        if not FIREBASE_AVAILABLE:
-            logger.error("Firebase not available")
+        if not FIREBASE_AVAILABLE or not db_manager:
+            logger.error("Firebase or db_manager not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -666,14 +693,14 @@ def get_mood_history():
     """Get mood history for a user from Firebase"""
     try:
         # Get user ID from verified Firebase token
-        user_id = request.user['uid']
+        user_id = g.user['uid']
         days = int(request.args.get('days', 30))
         
         logger.info(f"Getting mood history for user: {user_id}, days: {days}")
         logger.info(f"User UID from token: {user_id}")
         
-        if not FIREBASE_AVAILABLE:
-            logger.error("Firebase not available")
+        if not FIREBASE_AVAILABLE or not db_manager:
+            logger.error("Firebase or db_manager not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -711,12 +738,12 @@ def get_latest_mood():
     """Get the user's latest mood entry for chatbot verification"""
     try:
         # Get user ID from verified Firebase token
-        user_id = request.user['uid']
+        user_id = g.user['uid']
         
         logger.info(f"Getting latest mood for user: {user_id}")
         
-        if not FIREBASE_AVAILABLE:
-            logger.error("Firebase not available")
+        if not FIREBASE_AVAILABLE or not db_manager:
+            logger.error("Firebase or db_manager not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -797,13 +824,13 @@ def get_conversations():
     """Get all conversations for a user"""
     try:
         # Get user ID from verified Firebase token
-        user_id = request.user['uid']
+        user_id = g.user['uid']
         limit = int(request.args.get('limit', 20))
         
         logger.info(f"Getting conversations for user: {user_id}, limit: {limit}")
         
-        if not FIREBASE_AVAILABLE:
-            logger.error("Firebase not available")
+        if not FIREBASE_AVAILABLE or not db_manager:
+            logger.error("Firebase or db_manager not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -847,13 +874,13 @@ def create_conversation():
             }), 400
         
         # Get user ID from verified Firebase token
-        user_id = request.user['uid']
+        user_id = g.user['uid']
         title = data.get('title')
         
         logger.info(f"Creating conversation for user: {user_id} with title: {title}")
         
-        if not FIREBASE_AVAILABLE:
-            logger.error("Firebase not available")
+        if not FIREBASE_AVAILABLE or not db_manager:
+            logger.error("Firebase or db_manager not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -888,12 +915,12 @@ def get_conversation(conversation_id):
     """Get a specific conversation"""
     try:
         # Get user ID from verified Firebase token
-        user_id = request.user['uid']
+        user_id = g.user['uid']
         
         logger.info(f"Getting conversation: {conversation_id} for user: {user_id}")
         
-        if not FIREBASE_AVAILABLE:
-            logger.error("Firebase not available")
+        if not FIREBASE_AVAILABLE or not db_manager:
+            logger.error("Firebase or db_manager not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -931,11 +958,11 @@ def delete_conversation(conversation_id):
     """Delete a conversation"""
     try:
         # Get user ID from verified Firebase token
-        user_id = request.user['uid']
+        user_id = g.user['uid']
         
         logger.info(f"Deleting conversation: {conversation_id} for user: {user_id}")
         
-        if not FIREBASE_AVAILABLE:
+        if not FIREBASE_AVAILABLE or not db_manager:
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -989,12 +1016,12 @@ def add_message_to_conversation(conversation_id):
             }), 400
         
         # Get user ID from verified Firebase token
-        user_id = request.user['uid']
+        user_id = g.user['uid']
         
         logger.info(f"Adding message to conversation {conversation_id} for user {user_id}")
         
-        if not FIREBASE_AVAILABLE:
-            logger.error("Firebase not available")
+        if not FIREBASE_AVAILABLE or not db_manager:
+            logger.error("Firebase or db_manager not available")
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -1002,7 +1029,9 @@ def add_message_to_conversation(conversation_id):
             }), 503
         
         # Fetch recent conversation messages for lightweight context
-        conversation = db_manager.get_conversation(conversation_id, user_id)
+        conversation = None
+        if db_manager:
+            conversation = db_manager.get_conversation(conversation_id, user_id)
         messages_history = []
         try:
             messages_history = conversation.get('messages', []) if conversation else []
@@ -1011,12 +1040,13 @@ def add_message_to_conversation(conversation_id):
 
         # Fetch latest mood for this authenticated user
         latest_mood = None
-        try:
-            mood_history = db_manager.get_mood_history(user_id, 1)
-            if mood_history:
-                latest_mood = mood_history[0].get('mood')
-        except Exception:
-            latest_mood = None
+        if db_manager:
+            try:
+                mood_history = db_manager.get_mood_history(user_id, 1)
+                if mood_history:
+                    latest_mood = mood_history[0].get('mood')
+            except Exception:
+                latest_mood = None
 
         # Generate response from Gemini AI with short history and latest mood to avoid re-asking mood verification
         response = generate_response(message, history=messages_history, latest_mood=latest_mood)
@@ -1034,14 +1064,16 @@ def add_message_to_conversation(conversation_id):
             'type': 'user',
             'content': message
         }
-        db_manager.update_conversation(conversation_id, user_message_data)
+        if db_manager:
+            db_manager.update_conversation(conversation_id, user_message_data)
         
         # Add AI response to conversation
         ai_message_data = {
             'type': 'ai',
             'content': response['message']
         }
-        db_manager.update_conversation(conversation_id, ai_message_data)
+        if db_manager:
+            db_manager.update_conversation(conversation_id, ai_message_data)
         
         logger.info(f"Successfully added message to conversation {conversation_id}")
         
@@ -1072,7 +1104,7 @@ def get_chat_history():
         session_id = request.args.get('sessionId')
         limit = int(request.args.get('limit', 50))
         
-        if not FIREBASE_AVAILABLE:
+        if not FIREBASE_AVAILABLE or not db_manager:
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
@@ -1138,39 +1170,77 @@ def chat_health():
 # Wellness endpoints
 
 # Journal endpoints
-@app.route('/api/journals', methods=['GET'])
+@app.route('/api/journals', methods=['GET', 'POST'])
 @require_auth
-def get_journals_api():
-    """Get journal entries for a user from Firebase"""
+def journals_api():
+    """Handle journal entries - GET to retrieve, POST to save"""
     try:
         # Get user ID from verified Firebase token
-        user_id = request.user['uid']
+        user_id = g.user['uid']
 
-        if not FIREBASE_AVAILABLE:
+        if not FIREBASE_AVAILABLE or not db_manager:
             return jsonify({
                 'success': False,
                 'error': 'Database not available',
                 'message': 'Firebase database is not connected'
             }), 503
 
-        # Fetch journals from Firestore using db_manager
-        journals = db_manager.get_journals(user_id)
+        if request.method == 'GET':
+            # Fetch journals from Firestore using db_manager
+            journals = db_manager.get_journals(user_id)
 
-        return jsonify({
-            'success': True,
-            'data': {
-                'journal_logs': journals,
-                'count': len(journals),
-                'userId': user_id,
-                'timestamp': datetime.now().isoformat()
-            }
-        })
+            return jsonify({
+                'success': True,
+                'data': {
+                    'journal_logs': journals,
+                    'count': len(journals),
+                    'userId': user_id,
+                    'timestamp': datetime.now().isoformat()
+                }
+            })
+
+        elif request.method == 'POST':
+            # Save new journal entry
+            data = request.get_json()
+            
+            if not data or 'text' not in data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Journal text is required'
+                }), 400
+            
+            text = data['text'].strip()
+            if not text or len(text) > 5000:  # Reasonable limit for journal entries
+                return jsonify({
+                    'success': False,
+                    'error': 'Journal text must be between 1 and 5000 characters'
+                }), 400
+            
+            timestamp = data.get('timestamp', datetime.now().isoformat())
+            
+            logger.info(f"Saving journal entry for user: {user_id}")
+            
+            # Save journal entry using db_manager
+            journal_id = db_manager.add_journal(user_id, text, timestamp)
+            
+            logger.info(f"Journal entry saved with ID: {journal_id}")
+            
+            return jsonify({
+                'success': True,
+                'data': {
+                    'id': journal_id,
+                    'text': text,
+                    'timestamp': timestamp,
+                    'userId': user_id
+                }
+            })
+            
     except Exception as e:
-        logger.error(f"Get journals error: {str(e)}")
+        logger.error(f"Journals API error: {str(e)}")
         return jsonify({
             'success': False,
             'error': 'Internal server error',
-            'message': 'Failed to get journals'
+            'message': 'Failed to process journal request'
         }), 500
 
 @app.route('/api/wellness/coping-strategies', methods=['GET'])
@@ -1495,41 +1565,6 @@ def internal_error(error):
         'error': 'Internal Server Error',
         'message': 'Something went wrong'
     }), 500
-
-@app.route('/api/journals', methods=['GET'])
-@require_auth
-def get_journals():
-    """Get journal entries for a user from Firebase"""
-    try:
-        # Get user ID from verified Firebase token
-        user_id = request.user['uid']
-
-        if not FIREBASE_AVAILABLE:
-            return jsonify({
-                'success': False,
-                'error': 'Database not available',
-                'message': 'Firebase database is not connected'
-            }), 503
-
-        # Fetch journals from Firestore using db_manager
-        journals = db_manager.get_journals(user_id)  # You may need to implement this in db_manager
-
-        return jsonify({
-            'success': True,
-            'data': {
-                'journal_logs': journals,
-                'count': len(journals),
-                'userId': user_id,
-                'timestamp': datetime.now().isoformat()
-            }
-        })
-    except Exception as e:
-        logger.error(f"Get journals error: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error',
-            'message': 'Failed to get journals'
-        }), 500
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
