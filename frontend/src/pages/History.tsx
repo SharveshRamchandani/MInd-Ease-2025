@@ -8,6 +8,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { format, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval, isWithinInterval } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { MoodExportDialog } from "@/components/mood/mood-export-dialog";
 
 interface MoodEntry {
   id: string;
@@ -396,10 +397,15 @@ export default function History() {
                   <h3 className="text-lg font-medium">Export Data</h3>
                   <p className="text-sm text-muted-foreground">Download your mood history</p>
                 </div>
-                <Button variant="outline" size="sm">
-                  <Download className="w-4 h-4 mr-2" />
-                  Export
-                </Button>
+                <MoodExportDialog 
+                  moodHistory={moodHistory}
+                  trigger={
+                    <Button variant="outline" size="sm">
+                      <Download className="w-4 h-4 mr-2" />
+                      Export
+                    </Button>
+                  }
+                />
               </div>
             </Card>
 
@@ -566,10 +572,15 @@ export default function History() {
                 <h3 className="font-medium">Export Data</h3>
                 <p className="text-sm text-muted-foreground">Download your mood history</p>
               </div>
-              <Button variant="outline" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </Button>
+              <MoodExportDialog 
+                moodHistory={moodHistory}
+                trigger={
+                  <Button variant="outline" size="sm">
+                    <Download className="w-4 h-4 mr-2" />
+                    Export
+                  </Button>
+                }
+              />
             </div>
           </Card>
         </div>
