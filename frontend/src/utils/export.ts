@@ -1,6 +1,6 @@
 import { format as formatDate } from "date-fns";
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 // Extend jsPDF type to include autoTable
 declare module 'jspdf' {
@@ -277,7 +277,7 @@ export const generatePDF = (
   }
   
   // Generate table
-  pdf.autoTable({
+  autoTable(pdf, {
     head: [headers],
     body: tableData,
     startY: 90,
