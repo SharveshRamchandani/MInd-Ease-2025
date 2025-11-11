@@ -166,7 +166,7 @@ class DatabaseManager:
                 if conversation_data is not None:
                     conversation_data['id'] = doc.id
                     
-                    # If user_id is provided, validate ownership
+                # If user_id is provided, validate ownership
                     if user_id and conversation_data.get('user_id') != user_id:
                         logger.warning(f"User {user_id} attempted to access conversation {conversation_id} owned by {conversation_data.get('user_id')}")
                         return None
