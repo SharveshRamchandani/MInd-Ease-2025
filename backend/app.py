@@ -107,8 +107,10 @@ limiter = Limiter(
 try:
     # These are the official public APIs from google.generativeai
     # Type checker may flag as private but they are documented public APIs
-    genai.configure(api_key=os.getenv('GEMINI_API_KEY'))  # type: ignore
+    api_key = os.getenv('GEMINI_API_KEY') or 'AIzaSyAuYdnbTNk-KvUioIEd34WRcgqZcQmyqZg'  # Fallback to new key
+    genai.configure(api_key=api_key)  # type: ignore
     GEMINI_AI_AVAILABLE = True
+    logger.info("Gemini AI configured successfully")
 except Exception as e:
     GEMINI_AI_AVAILABLE = False
     logger.warning(f"Gemini AI configuration failed: {e}")
@@ -638,11 +640,19 @@ model = None
 if GEMINI_AI_AVAILABLE:
     try:
         # GenerativeModel is the official public API from google.generativeai
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')  # type: ignore
-        logger.info("Gemini AI model initialized successfully")
+        # Using gemini-2.5-flash - tested and working with the API key
+        model = genai.GenerativeModel('gemini-2.5-flash')  # type: ignore
+        logger.info("Gemini AI model (gemini-2.5-flash) initialized successfully")
     except Exception as e:
         model = None
         logger.warning(f"Gemini AI model initialization failed: {e}")
+        # Fallback to gemini-1.5-flash if 2.5 is not available
+        try:
+            logger.info("Trying fallback model: gemini-1.5-flash")
+            model = genai.GenerativeModel('gemini-1.5-flash')  # type: ignore
+            logger.info("Fallback model (gemini-1.5-flash) initialized successfully")
+        except Exception as e2:
+            logger.warning(f"Fallback model also failed: {e2}")
 else:
     logger.warning("Gemini AI not available - chatbot responses will be limited")
 
@@ -653,7 +663,8 @@ def generate_response(message, history=None, verified_mood=None, latest_mood=Non
     - latest_mood: optional latest (unverified) mood log string to mention once at conversation start
     """
     try:
-        if not os.getenv('GEMINI_API_KEY'):
+        api_key = os.getenv('GEMINI_API_KEY') or 'AIzaSyAuYdnbTNk-KvUioIEd34WRcgqZcQmyqZg'
+        if not api_key:
             raise Exception('Gemini API key is not configured')
         
         if not model:
